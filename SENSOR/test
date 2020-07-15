@@ -1,0 +1,21 @@
+total 6532
+-rwxr--r-- 1 st st   32598 Jul  2 15:03 bidirectional.mat
+-rw-rw-r-- 1 st st   10039 Jul  2 17:18 bidirectional.png
+-rwxr--r-- 1 st st  503354 Jul  2 15:03 cardoid.mat
+-rw-rw-r-- 1 st st   48909 Jul  2 17:18 cardoid.png
+-rwxr--r-- 1 st st  527040 Jul  2 15:03 dipole.mat
+-rw-rw-r-- 1 st st   61190 Jul  2 17:18 dipole.png
+-rwxr--r-- 1 st st   32732 Jul  2 15:03 hemisphere.mat
+-rw-rw-r-- 1 st st    9820 Jul  2 17:18 hemisphere.png
+-rwxr--r-- 1 st st  514699 Jul  2 15:03 hypercardoid.mat
+-rw-rw-r-- 1 st st   58759 Jul  2 17:18 hypercardoid.png
+-rwxr--r-- 1 st st 3659272 Jul  2 15:03 null_sensor.mat
+-rw-rw-r-- 1 st st    9867 Jul  2 17:18 null_sensor.png
+-rwxr--r-- 1 st st   33112 Jul  2 15:03 omnidirectional.mat
+-rw-rw-r-- 1 st st    9863 Jul  2 17:18 omnidirectional.png
+-rwxr--r-- 1 st st  493894 Jul  2 15:03 subcardoid.mat
+-rw-rw-r-- 1 st st   42328 Jul  2 17:18 subcardoid.png
+-rwxr--r-- 1 st st  512068 Jul  2 15:03 supercardoid.mat
+-rw-rw-r-- 1 st st   52428 Jul  2 17:18 supercardoid.png
+-rwxr--r-- 1 st st   32471 Jul  2 15:03 unidirectional.mat
+-rw-rw-r-- 1 st st    9954 Jul  2 17:18 unidirectional.png

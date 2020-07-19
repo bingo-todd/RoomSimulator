@@ -12,8 +12,9 @@ def pole2cartesian(angle, dist=1):
     """
     convert
     """
-    dist_xy = dist*np.cos(angle[2])
-    pos = np.asarray([dist_xy*np.cos(angle[0]), dist_xy*np.sin(angle[1]), dist*np.sin(angle[2])])
+    dist_xy = dist*np.cos(angle[1])
+    angle_rad = np.asarray(angle)/180*np.pi
+    pos = np.asarray([dist_xy*np.cos(angle_rad[0]), dist_xy*np.sin(angle_rad[0]), dist*np.sin(angle_rad[1])])
     return pos
 
 

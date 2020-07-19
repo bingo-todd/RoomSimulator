@@ -2,7 +2,7 @@ import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 import os
-from AxisTransform import cal_transform_matrix
+from AxisTransform import view2tm
 from Directivity import Directivity
 
 
@@ -14,13 +14,15 @@ class Source(object):
         direct_type: directivity type of source
         """
         self._load_config(config)
-        self.directivity = Directivity()
+        
+        self.directivity = Directivity(self.Fs)
         self.directivity.load(self.direct_type)
-        self.tm = cal_transform_matrix(self.view)
+        self.tm = view2tm(self.view)
 
     def _load_config(self, config):
-        self.pos = np.asarray([np.float32(item) for item in config['pos'].split()])
-        self.view = np.asarray([np.float32(item) for item in config['view'].split()])
+        self.Fs = np.float(config['Fs'])
+        self.pos = np.asarray([np.float32(item) for item in config['pos'].split(',')])
+        self.view = np.asarray([np.float32(item) for item in config['view'].split(',')])
         self.direct_type = config['directivity']
 
     @staticmethod

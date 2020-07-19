@@ -76,7 +76,7 @@ def plot_cube(cube_size, extra_point=None, extra_point_marker='+',
 
     # ax.set_aspect('equal')
     axisEqual3D(ax)
-    return fig
+    return fig, ax
 
 
 if __name__ == '__main__':

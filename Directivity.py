@@ -2,7 +2,7 @@ import scipy.io
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from BasicTools import get_fpath, nd_index
+from BasicTools import get_fpath, nd_index, wav_tools
 import logging
 
 
@@ -16,8 +16,9 @@ class Directivity(object):
     ele_range = [-90, 90]
     azi_range = [-180, 180]
 
-    def __init__(self):
-        None
+    def __init__(self, Fs):
+        self.Fs = Fs
+        self.valid_index_all = None
 
     def load(self, direct_type):
         """ S3D: sensitivity of mic in 3D
@@ -30,9 +31,20 @@ class Directivity(object):
         if direct_type not in self.direct_type_all:
             print(f'supported directivity type: {direct_type}')
             raise Exception(f'unknown type of directivity type {direct_type}')
+
         self.S3D = np.load(f'{self.direct_dir}/{direct_type}.npy', allow_pickle=True)
-        index_0, index_1 = np.nonzero(self.S3D is not None)
-        self.valid_index = np.concatenate((index_0[:, np.newaxis], index_1[:, np.newaxis]), axis=1)
+        valid_index_all = [[i, j] 
+                            for i in range(self.S3D.shape[0]) 
+                            for j in range(self.S3D.shape[1]) 
+                            if self.S3D[i, j] is not None]
+        self.valid_index_all = np.asarray(valid_index_all) 
+
+        # MIT HRIR Fs=44100, if input Fs is not 44100, resample S3D
+        if self.Fs is not None and self.Fs != 44100 and self.S3D.dtype == object:
+            logging.warning(f'resample hrir from 44100 to {self.Fs}')
+            print('resample')
+            for i, j in self.valid_index_all:
+                self.S3D[i, j] = wav_tools.resample(self.S3D[i, j], 44100, self.Fs)
 
     @classmethod
     def angle2index(self, angle):
@@ -44,8 +56,8 @@ class Directivity(object):
         azi_i, ele_i = self.angle2index(angle)
         ir = self.S3D[azi_i, ele_i]
         if ir is None:
-            dist_all = np.sum((self.valid_index-np.asarray([[azi_i, ele_i]]))**2)
-            azi_i_valid, ele_i_valid = self.valid_index[np.argmax()]
+            dist_all = np.sum((self.valid_index_all-np.asarray([[azi_i, ele_i]]))**2)
+            azi_i, ele_i = self.valid_index_all[np.argmin(dist_all)]
         return self.S3D[azi_i, ele_i]
 
     @classmethod
@@ -57,15 +69,13 @@ class Directivity(object):
             if is_plot:
                 S3D = np.load(file_path, allow_pickle=True)
                 if direct_type == 'binaural_L' or direct_type == 'binaural_R':
-                    ele = 0
-                    fig, ax = plt.subplots(4, 2, figsize=[10, 12], tight_layout=True)
-                    for i in range(8):
-                        azi = 45*i-180
-                        azi_index, ele_index = self.angle2index([azi, ele])
+                    ele_index = 90
+                    fig, ax = plt.subplots(7, 1, tight_layout=True, sharex=True, sharey=True)
+                    for i, azi in enumerate(range(-180, 181, 60)):
+                        azi_index = np.int(azi+180)
                         ir = S3D[azi_index, ele_index]
-                        ax_i, ax_j = nd_index(i, [4, 2])
-                        ax[ax_i, ax_j].plot(ir, linewidth=2)
-                        ax[ax_i, ax_j].set_title(f'azi:{azi}')
+                        ax[i].plot(ir, linewidth=2)
+                        ax[i].set_ylabel(f'{azi}')
                 else:
                     fig, ax = plt.subplots(1, 1)
                     ax.imshow(S3D, vmin=0, vmax=1, cmap='jet')
@@ -92,6 +102,3 @@ class Directivity(object):
 if __name__ == "__main__":
     # Directivity.mat2npy()
     Directivity.validate(is_plot=True)
-
-    # direct = Directivity('omnidirectional')
-    # direct.validate(is_plot=True)

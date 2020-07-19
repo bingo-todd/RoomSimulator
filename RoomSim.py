@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import os
 import logging
 
-from AxisTransform import cal_transform_matrix
+from AxisTransform import view2tm
 from DelayFilter import DelayFilter
 from Reverb import RT2Absorb
 from Room import ShoeBox
@@ -73,8 +73,12 @@ class RoomSim(object):
         # configure about room
         self.room = ShoeBox(config['Room'])
         # configure about sound source
+        # add Fs to source config
+        config['Source']['Fs'] = f'{self.Fs}'
         self.source = Source(config['Source'])
         # configure about receiver
+        # add Fs to receiver config
+        config['Receiver']['Fs'] = f'{self.Fs}'
         config_receiver = configparser.ConfigParser()
         config_receiver['Receiver'] = config['Receiver']
         n_mic = np.int8(config['Receiver']['n_mic'])
@@ -83,6 +87,13 @@ class RoomSim(object):
             mic_key = f'Mic_{mic_i}'
             config_receiver[mic_key] = config[mic_key]
         self.receiver = Receiver(config_receiver)
+
+    def show(self):
+        fig, ax = self.room.show()
+        ax.scatter(*self.source.pos, 'ro')
+        self.receiver.show(ax)
+        ax.legend()
+        return fig, ax
 
     def _make_HP_filter(self):
         # Second order high-pass IIR filter to remove DC buildup
@@ -183,7 +194,7 @@ class RoomSim(object):
         self.n_img = n_img
 
         if is_plot:
-            self.room.show_room(extra_point=self.img_pos_all)
+            self.room.show(extra_point=self.img_pos_all)
             plt.title(f'{self.n_img}')
             plt.show()
 
@@ -216,15 +227,15 @@ class RoomSim(object):
                 fig_verbose, ax_verbose = plt.subplots(1, 3, tight_layout=True, figsize=[12, 4])
                 os.makedirs('img/ir', exist_ok=True)
             is_plot_room = True
-            pb = ProcessBar(self.n_img)
+            # pb = ProcessBar(self.n_img)
             for img_i in np.arange(self.n_img):
-                pb.update()
+                # pb.update()
                 reflect_amp = self.reflect_attenuate_all[img_i]
 
-                pos_img_to_mic = np.dot(mic.tm_room, (self.img_pos_all[img_i] - mic.pos_room))
+                pos_img_to_mic = np.matmul(mic.tm_room.T, (self.img_pos_all[img_i] - mic.pos_room))
                 *angle_img_to_mic, dist = cartesian2pole(pos_img_to_mic)
 
-                pos_mic_to_img = np.dot(self.source.tm, (mic.pos_room - self.img_pos_all[img_i]))
+                pos_mic_to_img = np.matmul(self.source.tm.T, (mic.pos_room - self.img_pos_all[img_i]))
                 *angle_mic_to_img, _ = cartesian2pole(pos_mic_to_img)
 
                 # energy loss because of distance
@@ -236,9 +247,8 @@ class RoomSim(object):
                 # 计算得到的ir_tmp对应的时间范围是：-n_fft/2:n_fft/2, 相当于已经延迟了n_fft/2，即n_fft/2
                 ir_tmp = self.amp_spec_to_ir(reflect_amp)
 
-                # # directivity of sound source, directivity after imaged
-                # # TODO:镜像会改变麦克风相对声源的方位角度
-                # ir_tmp = filter(self.source.get_ir(angle_mic_to_img), 1, ir_tmp)
+                # directivity of sound source, directivity after imaged
+                ir_tmp = filter(self.source.get_ir(angle_mic_to_img), 1, ir_tmp)
 
                 # For primary sources, and image sources with impulse response
                 # peak magnitudes >= -100dB (1/100000)
@@ -304,7 +314,7 @@ class RoomSim(object):
             # ir_all[:, mic_i] = self.HP_filter(ir_all[:, mic_i])
 
         if is_plot:
-            fig, ax = plt.subplots(1, 1)
+            _, ax = plt.subplots(1, 1)
             ax.plot(ir_all)
             plt.show()
 
@@ -313,25 +323,30 @@ class RoomSim(object):
 
 if __name__ == '__main__':
     config = configparser.ConfigParser()
-    config['Basic'] = {'Fs': 16000,
+    config['Basic'] = {'Fs': 44100,
                        'reflect_order': -1}
-    config['Room'] = {'size': '5 5 5',
-                      'RT60': ' '.join([f'{item}' for item in np.ones(6) * 0.1]),
+    config['Room'] = {'size': '4, 4, 4',
+                      'RT60': ', '.join([f'{item}' for item in np.ones(6) * 0.1]),
                       'A': ''}
-    config['Source'] = {'pos': '2 2 2',
-                        'view': '0 0 0',
+    config['Source'] = {'pos': '3, 2, 2',
+                        'view': '0, 0, 0',
                         'directivity':'omnidirectional'}
-    config['Receiver'] = {'pos': '1 1 1',
-                          'view': '0 0 0',
-                          'n_mic': '1'}
-    config['Mic_0'] = {'pos': '0 -0.5 0',
-                       'view': '0 0 0',
+    config['Receiver'] = {'pos': '2, 2, 2',
+                          'view': '0, 0, 0',
+                          'n_mic': '2'}
+    head_r = 0.145/2
+    config['Mic_0'] = {'pos': f'0, {head_r}, 0',
+                       'view': '-90, 0, 0',
                        'direct_type': 'binaural_L'}
-    config['Mic_1'] = {'pos': '0 0.5 0',
-                       'view': '0 0 0',
+    config['Mic_1'] = {'pos': f'0, {-head_r}, 0',
+                       'view': '90, 0, 0',
                        'direct_type': 'binaural_R'}
 
     logging.basicConfig(level=logging.ERROR)
     roomsim = RoomSim(config)
-    roomsim.get_img()
-    roomsim.cal_ir(is_plot=True)
+
+    roomsim.show()
+    plt.show()
+
+    # roomsim.get_img()
+    # roomsim.cal_ir(is_plot=True)

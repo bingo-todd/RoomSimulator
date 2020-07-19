@@ -328,7 +328,7 @@ if __name__ == '__main__':
     config['Room'] = {'size': '4, 4, 4',
                       'RT60': ', '.join([f'{item}' for item in np.ones(6) * 0.1]),
                       'A': ''}
-    config['Source'] = {'pos': '3, 2, 2',
+    config['Source'] = {'pos': '2, 3, 2',
                         'view': '0, 0, 0',
                         'directivity':'omnidirectional'}
     config['Receiver'] = {'pos': '2, 2, 2',
@@ -345,8 +345,11 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.ERROR)
     roomsim = RoomSim(config)
 
-    roomsim.show()
-    plt.show()
+    print(roomsim.room.A)
+
+    # roomsim.show()
+    # plt.show()
 
     # roomsim.get_img()
-    # roomsim.cal_ir(is_plot=True)
+    # rir = roomsim.cal_ir(is_plot=True)
+    # np.save('rir.npy', rir)

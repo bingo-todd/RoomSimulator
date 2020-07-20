@@ -2,18 +2,21 @@ import numpy as np
 import scipy.signal
 
 
+rad_per_degree = np.pi/180
+
+
 def cal_dist(x1, x2=None):
     if x2 is None:
         x2 = np.zeros(3)
     return np.sqrt(np.sum((x1 - x2) ** 2))
 
 
-def pole2cartesian(angle, dist=1):
+def pole2cartesian(angle_degree, dist=1):
     """
     convert
     """
-    dist_xy = dist*np.cos(angle[1])
-    angle_rad = np.asarray(angle)/180*np.pi
+    dist_xy = dist*np.cos(angle_degree[1])
+    angle_rad = np.asarray(angle_degree)*rad_per_degree
     pos = np.asarray([dist_xy*np.cos(angle_rad[0]), dist_xy*np.sin(angle_rad[0]), dist*np.sin(angle_rad[1])])
     return pos
 
@@ -21,8 +24,8 @@ def pole2cartesian(angle, dist=1):
 def cartesian2pole(pos):
     dist = cal_dist(pos)
     dist_xy = np.sqrt(np.sum(pos[0:2]**2))
-    azi = np.arccos(pos[0]/dist_xy)
-    ele = np.arcsin(pos[1]/dist_xy)
+    azi = -np.sign(pos[1]) * np.arccos(pos[0]/dist_xy)/rad_per_degree  # -180 ~ 180, right is positive, left is negative
+    ele = np.arctan(pos[2]/dist_xy)/rad_per_degree  
     return [azi, ele, dist]
 
 

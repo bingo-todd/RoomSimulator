@@ -123,7 +123,7 @@ if __name__ == '__main__':
     config = configparser.ConfigParser()
     config['Receiver'] = {'Fs': '44100',
                           'pos': '0, 0, 0',
-                          'view': '0, 0, 45',
+                          'view': '0, 0, 0',
                           'n_mic': '2'}
     config['Mic_0'] = {'pos': '0, 5, 0',
                        'view': '-90, 0, 0',
@@ -132,6 +132,17 @@ if __name__ == '__main__':
                        'view': '90, 0, 0',
                        'direct_type': 'binaural_R'}
     receiver = Receiver(config)
+
+    fig, ax = plt.subplots(1, 4, sharex=True, sharey=True)
+    for i in range(4):
+        rir = receiver.mic_all[0].get_ir([i*20, 0])
+        ax[i].plot(rir)
+    plt.show()
+
+    print(receiver.tm, '\n', receiver.mic_all[0].tm)
+
+    print(np.matmul(receiver.mic_all[0].tm.T, np.asarray([1, 0, 0])))
+    raise Exception()
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')

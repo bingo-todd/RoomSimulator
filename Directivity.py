@@ -56,7 +56,7 @@ class Directivity(object):
         azi_i, ele_i = self.angle2index(angle)
         ir = self.S3D[azi_i, ele_i]
         if ir is None:
-            dist_all = np.sum((self.valid_index_all-np.asarray([[azi_i, ele_i]]))**2)
+            dist_all = np.sum((self.valid_index_all-np.asarray([[azi_i, ele_i]]))**2, axis=1)
             azi_i, ele_i = self.valid_index_all[np.argmin(dist_all)]
         return self.S3D[azi_i, ele_i]
 

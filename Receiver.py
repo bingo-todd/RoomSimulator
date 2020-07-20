@@ -44,6 +44,10 @@ class Receiver(object):
         self._load_config(config)
 
         self.tm = view2tm(self.view)
+
+        self.direct_type = 'omnidirectional'  # do not considerate mic
+        self.directivity = Directivity(self.Fs)
+        self.directivity.load(self.direct_type)
         # combine transform matrix of receiver and mic
         # view of mic is relative to receiver
         for mic in self.mic_all:

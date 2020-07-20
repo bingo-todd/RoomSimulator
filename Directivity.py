@@ -32,6 +32,7 @@ class Directivity(object):
             print(f'supported directivity type: {direct_type}')
             raise Exception(f'unknown type of directivity type {direct_type}')
 
+        self.direct_type = direct_type
         self.S3D = np.load(f'{self.direct_dir}/{direct_type}.npy', allow_pickle=True)
         valid_index_all = [[i, j] 
                             for i in range(self.S3D.shape[0]) 
@@ -56,6 +57,9 @@ class Directivity(object):
         azi_i, ele_i = self.angle2index(angle)
         ir = self.S3D[azi_i, ele_i]
         if ir is None:
+            if self.direct_type == 'binaural_L' or self.direct_type == 'binaural_R':
+                if angle[1] < -40:  # elevation = -40 ~ 90 
+                    return None
             dist_all = np.sum((self.valid_index_all-np.asarray([[azi_i, ele_i]]))**2, axis=1)
             azi_i, ele_i = self.valid_index_all[np.argmin(dist_all)]
         return self.S3D[azi_i, ele_i]

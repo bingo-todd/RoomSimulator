@@ -11,7 +11,6 @@ if __name__ == "__main__":
     # wav_tools.write_wav(record, fs, 'record.wav')
 
     rir_ref = scipy.io.loadmat('pos_1_S1.mat', squeeze_me=True)['data']
-    print(rir_ref)
     
     fig, ax = plt.subplots(2, 2)
     ax[0, 0].plot(rir[:, 0])

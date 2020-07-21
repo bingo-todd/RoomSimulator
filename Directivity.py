@@ -59,10 +59,10 @@ class Directivity(object):
         if ir is None:
             if self.direct_type == 'binaural_L' or self.direct_type == 'binaural_R':
                 if angle[1] < -40:  # elevation = -40 ~ 90 
-                    return None
+                    return None, None, None
             dist_all = np.sum((self.valid_index_all-np.asarray([[azi_i, ele_i]]))**2, axis=1)
             azi_i, ele_i = self.valid_index_all[np.argmin(dist_all)]
-        return self.S3D[azi_i, ele_i]
+        return self.S3D[azi_i, ele_i], azi_i, ele_i
 
     @classmethod
     def validate(self, is_plot=True):
@@ -73,13 +73,17 @@ class Directivity(object):
             if is_plot:
                 S3D = np.load(file_path, allow_pickle=True)
                 if direct_type == 'binaural_L' or direct_type == 'binaural_R':
-                    ele_index = 90
-                    fig, ax = plt.subplots(7, 1, tight_layout=True, sharex=True, sharey=True)
-                    for i, azi in enumerate(range(-180, 181, 60)):
-                        azi_index = np.int(azi+180)
-                        ir = S3D[azi_index, ele_index]
-                        ax[i].plot(ir, linewidth=2)
-                        ax[i].set_ylabel(f'{azi}')
+                    fig, ax = plt.subplots(5, 7, figsize=[12, 8], tight_layout=True, sharex=True, sharey=True)
+                    for ele_i, ele in enumerate(range(-60, 61, 30)):
+                        for azi_i, azi in enumerate(range(-180, 181, 60)):
+                            ele_index = np.int(ele+90)
+                            azi_index = np.int(azi+180)
+                            ir = S3D[azi_index, ele_index]
+                            if ir is None:
+                                continue
+                            ax[ele_i, azi_i].plot(ir, linewidth=2)
+                            ax[0, azi_i].set_title(f'{azi}')
+                        ax[ele_i, 0].set_ylabel(f'{ele}')
                 else:
                     fig, ax = plt.subplots(1, 1)
                     ax.imshow(S3D, vmin=0, vmax=1, cmap='jet')

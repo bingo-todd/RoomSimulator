@@ -45,9 +45,10 @@ class RoomSim(object):
         self.n_fft_half_valid = np.int32(self.n_fft/2) # dc component is not considered
         self.freq_norm_all = np.arange(self.n_fft_half_valid+1)/self.n_fft_half_valid
         self.window = np.hanning(self.n_fft)
+        self.zero_padd_array = np.zeros(n_fft)
 
         RT60 = self.room.RT60
-        self.ir_len = np.int32(np.floor(np.max(RT60)*self.Fs))
+        self.ir_len = np.int(np.floor(np.max(RT60)*self.Fs))
 
         self.n_cube_xyz = np.ceil(self.ir_len/self.Fs_c/(self.room.size*2))
         self.n_img_in_cube = 8
@@ -217,15 +218,14 @@ class RoomSim(object):
         # interpolated grid points
         amp_reflect_extend = np.concatenate((amp_reflect[:1], amp_reflect, amp_reflect[-1:]))
         spec_amp_half = interp1d(self.F_abs_extend_norm, amp_reflect_extend)(self.freq_norm_all)
-        spec_amp = np.concatenate((spec_amp_half, np.flip(spec_amp_half[1:-1])))
-        ir = np.real(np.fft.ifft(spec_amp, self.n_fft))
+        spec_amp = np.concatenate((spec_amp_half, np.conj(np.flip(spec_amp_half[1:-1]))))
+        ir = np.real(np.fft.ifft(spec_amp))
         ir = self.window * np.concatenate((ir[self.n_fft_half_valid+1:self.n_fft],
                                            ir[:self.n_fft_half_valid+1]))
         return ir
 
     def _cal_ir_1mic(self, mic, logger):
         ir = np.zeros(self.ir_len)
-        dist_img_all = np.zeros(self.n_img)
         # pb = ProcessBar(self.n_img)
         for img_i in np.arange(self.n_img):
             # pb.update()
@@ -234,11 +234,9 @@ class RoomSim(object):
             else:
                 pos_img_to_mic = np.matmul(mic.tm_room.T, (self.img_pos_all[img_i] - mic.pos_room))
             *angle_img_to_mic, dist = cartesian2pole(pos_img_to_mic)
-
-            #
-            dist_img_all[img_i] = dist
+            
             # 
-            logger.info(f'{img_i}  {dist}  {self.img_pos_all[img_i] - self.receiver.pos}  {pos_img_to_mic}  {angle_img_to_mic}')
+            logger.info(f'{img_i}  {dist:.2f}  {angle_img_to_mic}')
 
             pos_mic_to_img = np.matmul(self.source.tm.T, (mic.pos_room - self.img_pos_all[img_i]))
             *angle_mic_to_img, _ = cartesian2pole(pos_mic_to_img)
@@ -247,6 +245,7 @@ class RoomSim(object):
             # energy loss because of distance
             reflect_amp = reflect_amp/dist
             # absorption due to air
+
             reflect_amp = reflect_amp*(self.air_attenuate_per_dist**dist)
 
             # calculate ir based on amp
@@ -254,17 +253,18 @@ class RoomSim(object):
             ir_tmp = self.amp_spec_to_ir(reflect_amp)
 
             # directivity of sound source, directivity after imaged
-            ir_tmp = filter(self.source.get_ir(angle_mic_to_img), 1, ir_tmp)
+            ir_source = self.source.get_ir(angle_mic_to_img)
+            ir_tmp = filter(ir_source, 1, ir_tmp)
 
             # For primary sources, and image sources with impulse response
             # peak magnitudes >= -100dB (1/100000)
-            if np.max(np.abs(ir_tmp)) >= self.reflect_amp_theta:
+            if True:  # np.max(np.abs(ir_tmp)) >= self.reflect_amp_theta:
                 # mic directivity filter
                 ir_mic = mic.get_ir(angle_img_to_mic)
                 if ir_mic is None:
                     continue
-                ir_tmp = filter(ir_mic, 1, ir_tmp)
-
+                # ir_tmp = filter(ir_mic, 1, np.concatenate((ir_tmp, self.zero_padd_array)))
+                
                 # parse delay into integer and fraction.
                 delay_sample_num = dist * self.Fs_c
                 delay_sample_num_int = np.int32(np.round(delay_sample_num))
@@ -302,7 +302,7 @@ class RoomSim(object):
         file_handler = logging.FileHandler(log_path)
         logger.addHandler(file_handler)
         logger.setLevel(logging.INFO)
-        return logger
+        return logger, file_handler
 
     def cal_ir_mic(self):
         """
@@ -312,9 +312,10 @@ class RoomSim(object):
 
         ir_all = []
         for mic_i, mic in enumerate(self.receiver.mic_all):
-            logger = self.make_file_logger(f'log/cal_ir_mic_{mic_i}.log')
+            logger, file_handler = self.make_file_logger(f'log/cal_ir_mic_{mic_i}.log')
             ir = self._cal_ir_1mic(mic, logger)
             ir_all.append(ir.reshape([-1, 1]))
+            logger.removeHandler(file_handler)
         ir_all = np.concatenate(ir_all, axis=1)
         return ir_all
 
@@ -365,12 +366,18 @@ if __name__ == '__main__':
     # logging.basicConfig(level=logging.INFO)
     roomsim = RoomSim(config)
 
-    fig, ax = roomsim.show()
-    plt.show()
+    # fig, ax = roomsim.show()
+    # plt.show()
 
-    # roomsim.get_img()
+    roomsim.get_img()
     # roomsim.save_img_info()
 
-    roomsim.load_img_info()
+    # roomsim.load_img_info()
     rir = roomsim.cal_ir_mic()
+
+    fig, ax = plt.subplots(1, 2)
+    ax[0].plot(rir[:, 0])
+    ax[1].plot(rir[:, 1])
+    plt.show()
+
     np.save('rir.npy', rir)

@@ -19,18 +19,20 @@ def H3D2S3D():
         azi_all = np.linspace(0, 360, n_azi+1)[:-1]
         for azi_i, azi in enumerate(azi_all):
             hrir = hrir_all[ele_i, azi_i]
-            ele_index = np.int(ele + 90)
+            ele_index = np.int(np.round(ele + 90))
 
             # left is negative, right is positive
-            azi_index_L = np.int(np.mod(azi+90+180, 360))  # +90: listener's front is the 90 of left ear
-                                                           # +180: move the direct front in the middle
+            azi_index_L = np.int(np.round(np.mod(azi+90+180, 360)))  
+            # +90: listener's front is the 90 of left ear
+            # +180: move the direct front in the middle
             S3D_L[azi_index_L, ele_index] = hrir[:, 0]
 
-            azi_index_R = np.int(np.mod(azi-90+180, 360))  # -90: listener's front is the -90 of right ear 
-                                                              # the front area of listener is the left of right ear, so - is needed
-                                                              # +180: move the direct front in the middle
+            azi_index_R = np.int(np.round(np.mod(azi-90+180, 360)))  
+            # -90: listener's front is the -90 of right ear 
+            # the front area of listener is the left of right ear, so - is needed
+            # +180: move the direct front in the middle
             S3D_R[azi_index_R, ele_index] = hrir[:, 1]
-    
+
     # -180 and +180 are the same direction
     S3D_L[360, :] = S3D_L[0, :]
     S3D_R[360, :] = S3D_R[0, :]

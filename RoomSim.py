@@ -22,10 +22,10 @@ class RoomSim(object):
         self._load_config(config)
 
         self.T_Fs = 1. / self.Fs
-        self.F_nyquist = self.Fs/2.0  # Half sampling frequency
+        self.F_nyquist = self.Fs/2.0  # Half of sampling frequency
 
         # constants
-        self.F_abs = np.array([125, 250, 500, 1000, 2000, 4000])
+        self.F_abs = np.array([125, 250, 500, 1000, 2000, 4000])  # frequency of each sound absorption coefficients
         self.F_abs_norm = self.F_abs/self.F_nyquist
         self.F_abs_extend = np.concatenate(([0], self.F_abs, [self.F_nyquist]))
         self.F_abs_extend_norm = self.F_abs_extend/self.F_nyquist
@@ -50,7 +50,7 @@ class RoomSim(object):
         RT60 = self.room.RT60
         self.ir_len = np.int(np.floor(np.max(RT60)*self.Fs))
 
-        self.n_cube_xyz = np.ceil(self.ir_len/self.Fs_c/(self.room.size*2))
+        self.n_cube_xyz = np.ones(3)*8  # np.ceil(self.ir_len/self.Fs_c/(self.room.size*2))
         self.n_img_in_cube = 8
 
         # init
@@ -60,7 +60,7 @@ class RoomSim(object):
         self.air_attenuate_per_dist = np.exp(-0.5*m_air).T
 
         # threshold of ir amplitude
-        self.reflect_amp_theta = 1e-5
+        self.reflect_amp_theta = 1e-1
 
         self.img_pos_all = np.zeros((0, 3))
         self.reflect_attenuate_all = np.zeros((0, self.F_abs.shape[0]))
@@ -203,6 +203,7 @@ class RoomSim(object):
 
                         logger.info(f'{n_img}  {n_reflect_wall_all.reshape([-1])}  {img_pos_all[n_img]}')
 
+        logger.removeHandler(file_handler)
         # Complete impulse response for the source
         n_img = n_img + 1
         self.img_pos_all = img_pos_all[:n_img]
@@ -236,7 +237,7 @@ class RoomSim(object):
             *angle_img_to_mic, dist = cartesian2pole(pos_img_to_mic)
             
             # 
-            logger.info(f'{img_i}  {dist:.2f}  {angle_img_to_mic}')
+            # logger.info(f'{img_i}  {dist:.2f}  {angle_img_to_mic}')
 
             pos_mic_to_img = np.matmul(self.source.tm.T, (mic.pos_room - self.img_pos_all[img_i]))
             *angle_mic_to_img, _ = cartesian2pole(pos_mic_to_img)
@@ -253,21 +254,22 @@ class RoomSim(object):
             ir_tmp = self.amp_spec_to_ir(reflect_amp)
 
             # directivity of sound source, directivity after imaged
-            ir_source = self.source.get_ir(angle_mic_to_img)
-            ir_tmp = filter(ir_source, 1, ir_tmp)
+            # ir_source = self.source.get_ir(angle_mic_to_img)
+            # ir_tmp = filter(ir_source, 1, ir_tmp)
 
             # For primary sources, and image sources with impulse response
             # peak magnitudes >= -100dB (1/100000)
-            if True:  # np.max(np.abs(ir_tmp)) >= self.reflect_amp_theta:
+            if np.max(np.abs(ir_tmp[:self.n_fft_half_valid])) >= self.reflect_amp_theta:
                 # mic directivity filter
-                ir_mic = mic.get_ir(angle_img_to_mic)
+                ir_mic, azi_i, ele_i = mic.get_ir(angle_img_to_mic)
                 if ir_mic is None:
                     continue
-                # ir_tmp = filter(ir_mic, 1, np.concatenate((ir_tmp, self.zero_padd_array)))
+                logger.info(f'{img_i}  {azi_i} {ele_i}')
+                ir_tmp = filter(ir_mic, 1, np.concatenate((ir_tmp, self.zero_padd_array)))
                 
                 # parse delay into integer and fraction.
                 delay_sample_num = dist * self.Fs_c
-                delay_sample_num_int = np.int32(np.round(delay_sample_num))
+                delay_sample_num_int = np.int(np.round(delay_sample_num))
                 delay_sample_num_frac = delay_sample_num - delay_sample_num_int
 
                 # apply fraction delay to ir_tmp
@@ -289,7 +291,8 @@ class RoomSim(object):
                     # the remaining delay is larger than ir_len, give up
                     logging.warning(f'too larger delay   {delay_sample_num}')
             else:
-                logging.warning('give up small value')
+                None
+                # logging.warning('give up small value')
 
         # High-pass filtering
         # when interpolating the spectrum of absorption, DC value is assigned to the value of 125Hz
@@ -366,13 +369,14 @@ if __name__ == '__main__':
     # logging.basicConfig(level=logging.INFO)
     roomsim = RoomSim(config)
 
-    # fig, ax = roomsim.show()
+    fig, ax = roomsim.show()
+    fig.savefig('img/room.png')
     # plt.show()
-
-    roomsim.get_img()
+ 
+    # roomsim.get_img()
     # roomsim.save_img_info()
 
-    # roomsim.load_img_info()
+    roomsim.load_img_info()
     rir = roomsim.cal_ir_mic()
 
     fig, ax = plt.subplots(1, 2)

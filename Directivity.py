@@ -49,8 +49,8 @@ class Directivity(object):
 
     @classmethod
     def angle2index(self, angle):
-        azi_index = np.int16(np.mod(angle[0]+180, 360))
-        ele_index = np.int16(angle[1]+90)
+        azi_index = np.int(np.round(np.mod(angle[0]+180, 360)))
+        ele_index = np.int(np.round(angle[1]+90))
         return azi_index, ele_index
 
     def get_ir(self, angle):

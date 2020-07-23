@@ -50,7 +50,7 @@ class RoomSim(object):
         RT60 = self.room.RT60
         self.ir_len = np.int(np.floor(np.max(RT60)*self.Fs))
 
-        self.n_cube_xyz = np.ones(3)*8  # np.ceil(self.ir_len/self.Fs_c/(self.room.size*2))
+        self.n_cube_xyz = np.ceil(self.ir_len/self.Fs_c/(self.room.size*2))
         self.n_img_in_cube = 8
 
         # init
@@ -193,6 +193,10 @@ class RoomSim(object):
                     for i in np.arange(self.n_img_in_cube):
                         img_pos = cube_pos + img_pos_in_cube[i]
                         n_img = n_img+1
+
+                        if cube_i_x == 0 and cube_i_y == 0 and cube_i_z == 0:
+                            print(n_img, img_pos)
+
                         img_pos_all[n_img] = img_pos
                         n_reflect_xyz0 = n_reflect_xyz1 + n_reflect_relative[i].reshape([3, 1])
                         n_reflect_wall_all = np.reshape(
@@ -225,9 +229,12 @@ class RoomSim(object):
                                            ir[:self.n_fft_half_valid+1]))
         return ir
 
-    def _cal_ir_1mic(self, mic, logger):
+    def _cal_ir_1mic(self, mic, log_path):
         ir = np.zeros(self.ir_len)
         # pb = ProcessBar(self.n_img)
+
+        logger = open(log_path, mode='w')
+
         for img_i in np.arange(self.n_img):
             # pb.update()
             if mic.direct_type == 'binaural_L' or mic.direct_type == 'binaural_R':
@@ -259,12 +266,14 @@ class RoomSim(object):
 
             # For primary sources, and image sources with impulse response
             # peak magnitudes >= -100dB (1/100000)
-            if np.max(np.abs(ir_tmp[:self.n_fft_half_valid])) >= self.reflect_amp_theta:
+            if True:  # np.max(np.abs(ir_tmp[:self.n_fft_half_valid])) >= self.reflect_amp_theta:
                 # mic directivity filter
                 ir_mic, azi_i, ele_i = mic.get_ir(angle_img_to_mic)
                 if ir_mic is None:
                     continue
-                logger.info(f'{img_i}  {azi_i} {ele_i}')
+                
+                logger.write(f'{img_i} {self.img_pos_all[img_i]} {dist}  {pos_img_to_mic}')
+                
                 ir_tmp = filter(ir_mic, 1, np.concatenate((ir_tmp, self.zero_padd_array)))
                 
                 # parse delay into integer and fraction.
@@ -289,7 +298,7 @@ class RoomSim(object):
                         ir[start_index_1: start_index_1+ir_len_tmp] + ir_tmp[:ir_len_tmp]
                 else:
                     # the remaining delay is larger than ir_len, give up
-                    logging.warning(f'too larger delay   {delay_sample_num}')
+                    logger.write(f'too larger delay   {delay_sample_num}\n')
             else:
                 None
                 # logging.warning('give up small value')
@@ -315,10 +324,9 @@ class RoomSim(object):
 
         ir_all = []
         for mic_i, mic in enumerate(self.receiver.mic_all):
-            logger, file_handler = self.make_file_logger(f'log/cal_ir_mic_{mic_i}.log')
-            ir = self._cal_ir_1mic(mic, logger)
+            log_path = f'log/cal_ir_mic_{mic_i}.log'
+            ir = self._cal_ir_1mic(mic, log_path)
             ir_all.append(ir.reshape([-1, 1]))
-            logger.removeHandler(file_handler)
         ir_all = np.concatenate(ir_all, axis=1)
         return ir_all
 
@@ -373,15 +381,16 @@ if __name__ == '__main__':
     fig.savefig('img/room.png')
     # plt.show()
  
-    # roomsim.get_img()
+    roomsim.get_img()
     # roomsim.save_img_info()
 
-    roomsim.load_img_info()
+    # roomsim.load_img_info()
     rir = roomsim.cal_ir_mic()
 
-    fig, ax = plt.subplots(1, 2)
+    fig, ax = plt.subplots(1, 3)
     ax[0].plot(rir[:, 0])
     ax[1].plot(rir[:, 1])
-    plt.show()
+    ax[2].plot(rir[:, 0] - rir[:, 1])
+    fig.savefig('rir.png')
 
     np.save('rir.npy', rir)

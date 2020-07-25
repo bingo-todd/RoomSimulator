@@ -58,11 +58,11 @@ class Directivity(object):
         ir = self.S3D[azi_i, ele_i]
         if ir is None:
             if self.direct_type == 'binaural_L' or self.direct_type == 'binaural_R':
-                if angle[1] != 0:  # elevation = -40 ~ 90 
-                    return None, None, None
+                if angle[1] <- 40:  # elevation = -40 ~ 90 
+                    return None
             dist_all = np.sum((self.valid_index_all-np.asarray([[azi_i, ele_i]]))**2, axis=1)
             azi_i, ele_i = self.valid_index_all[np.argmin(dist_all)]
-        return self.S3D[azi_i, ele_i], azi_i, ele_i
+        return self.S3D[azi_i, ele_i]
 
     @classmethod
     def validate(self, is_plot=True):

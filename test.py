@@ -37,5 +37,24 @@ def test_fft():
     plt.show()
 
 
+def test_hrir():
+    hrir_L_path = 'SENSOR/Types/binaural_L.npy'
+    hrir_L = np.load(hrir_L_path, allow_pickle=True)
+
+    hrir_R_path = 'SENSOR/Types/binaural_R.npy'
+    hrir_R = np.load(hrir_R_path, allow_pickle=True)
+    
+    for i in range(361):
+        if hrir_L[i, 90] is None and hrir_R[360-i, 90] is None:
+            continue
+        fig, ax = plt.subplots(1, 1)
+        ax.plot(hrir_L[i, 90])
+        ax.plot(hrir_R[360-i, 90])
+        ax.set_title(f'{i}')
+        fig.savefig(f'brir_comp_{i}.png')
+        plt.close(fig)
+
+
 if __name__ == '__main__':
-    test_rir()
+    test_hrir()
+

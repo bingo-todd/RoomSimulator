@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 
 class DelayFilter(object):
-    def __init__(self, fs, delay, order=32, f_high=None):
+    def __init__(self, fs, delay, order=32, padd_len=None, f_high=None):
         """
         fir delay filter
         Args:
@@ -33,6 +33,10 @@ class DelayFilter(object):
         self.delay = delay
         self.order = order
 
+        if padd_len is None:
+            padd_len = order
+        self.padd_len = padd_len
+
     def plot_spectrum(self):
         fig, ax = plt.subplots(3, 1)
         ax[0].plot(self.b)
@@ -40,10 +44,11 @@ class DelayFilter(object):
         amp_spec, phase_spec = np.abs(spec), np.angle(spec)
         ax[1].plot(amp_spec)
         ax[2].plot(np.unwrap(phase_spec))
+        return fig, ax
 
     def filter(self, x, is_padd=False):
         if is_padd:
-            x_local = np.concatenate([x, np.zeros(self.order)])
+            x_local = np.concatenate([x, np.zeros(self.padd_len)])
         else:
             x_local = x
         y = scipy.signal.lfilter(self.b, self.a, x_local)

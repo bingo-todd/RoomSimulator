@@ -12,9 +12,8 @@ from Reverb import RT2Absorb
 from Room import ShoeBox
 from Source import Source
 from Receiver import Receiver
-from utils import cal_dist, cartesian2pole, pole2cartesian, filter
+from utils import cal_dist, cartesian2pole, pole2cartesian, filter, My_Logger
 from BasicTools import ProcessBar
-
 
 class RoomSim(object):
     def __init__(self, config):
@@ -48,20 +47,20 @@ class RoomSim(object):
         self.zero_padd_array = np.zeros(n_fft)
 
         RT60 = self.room.RT60
-        self.ir_len = np.int(np.floor(np.max(RT60)*self.Fs))
+        delay_rough = cal_dist(self.source.pos, self.receiver.pos) / self.c_air
+        self.ir_len = np.int(np.floor((np.max(RT60)+delay_rough)*self.Fs))
 
         self.n_cube_xyz = np.ceil(self.ir_len/self.Fs_c/(self.room.size*2))
-        self.n_img_in_cube = 8
-
-        # init
-        self.amp_gain_reflect_all = np.zeros((0, self.F_abs.shape[0]))
+        self.n_img_in_cube = 8  # number of image source in one cube
 
         m_air = 6.875e-4*(self.F_abs/1000)**1.7
         self.air_attenuate_per_dist = np.exp(-0.5*m_air).T
 
         # threshold of ir amplitude
-        self.reflect_amp_theta = 1e-1
+        self.reflect_amp_theta = 1e-10
 
+        # init
+        self.amp_gain_reflect_all = np.zeros((0, self.F_abs.shape[0]))
         self.img_pos_all = np.zeros((0, 3))
         self.reflect_attenuate_all = np.zeros((0, self.F_abs.shape[0]))
         self.n_img = 0
@@ -134,7 +133,9 @@ class RoomSim(object):
             result = result * self.cal_b_power(wall_i, n_all[wall_i])
         return result
 
-    def get_img(self, is_plot=False, is_verbose=False):
+    def get_img(self, is_plot=False, is_verbose=False, log_path='log/get_img.log'):
+        logger = My_Logger(log_path)
+
         # TODO input argments validate
         # use dictionary to save the exponent of B
         # init
@@ -142,6 +143,7 @@ class RoomSim(object):
 
         # codes the eight permutations of x+/-xp, y+/-yp, z+/-zp
         # where [-1 -1 -1] identifies the parent source.
+        # 需要沿着axis的正方向计算reflect的相对次数
         img_pos_rel_in_cube = np.array(
             [[+1, +1, +1],
              [+1, -1, +1],
@@ -176,11 +178,6 @@ class RoomSim(object):
         reflect_attenuate_all = np.zeros((n_img_max, n_F_abs))
         n_img = -1  # number of significant images of each parent source
 
-        logger = logging.getLogger()
-        file_handler = logging.FileHandler('log/get_img.log', mode='w')
-        logger.addHandler(file_handler)
-        logger.setLevel(logging.INFO)
-
         for cube_i_x in np.arange(-self.n_cube_xyz[0], self.n_cube_xyz[0]+1):
             cube_pos_x = cube_i_x * self.room.size_double[0]
             for cube_i_y in np.arange(-self.n_cube_xyz[1], self.n_cube_xyz[1]+1):
@@ -188,36 +185,31 @@ class RoomSim(object):
                 for cube_i_z in np.arange(-self.n_cube_xyz[2], self.n_cube_xyz[2]+1):
                     cube_pos_z = cube_i_z * self.room.size_double[2]
                     cube_pos = np.asarray([cube_pos_x, cube_pos_y, cube_pos_z])
-                    cube_i_xyz = np.asarray([cube_i_x, cube_i_y, cube_i_z])
-                    n_reflect_xyz1 = np.abs(cube_i_xyz).reshape([3, 1])
+                    n_reflect_xyz1 = np.abs(np.asarray([cube_i_y, cube_i_x, cube_i_z]))
+                    
                     for i in np.arange(self.n_img_in_cube):
-                        img_pos = cube_pos + img_pos_in_cube[i]
                         n_img = n_img+1
-
-                        if cube_i_x == 0 and cube_i_y == 0 and cube_i_z == 0:
-                            print(n_img, img_pos)
-
+                        img_pos = cube_pos + img_pos_in_cube[i]
                         img_pos_all[n_img] = img_pos
-                        n_reflect_xyz0 = n_reflect_xyz1 + n_reflect_relative[i].reshape([3, 1])
-                        n_reflect_wall_all = np.reshape(
-                            np.concatenate((n_reflect_xyz0, n_reflect_xyz1),
-                                           axis=1),
-                            [6, 1])
+
+                        n_reflect_xyz0 = np.abs(np.asarray([cube_i_y, cube_i_x, cube_i_z]) - n_reflect_relative[i])
+                        n_reflect_wall_all = np.concatenate((n_reflect_xyz0, n_reflect_xyz1))
                         reflect_attenuate_all[n_img] = self.cal_B_power(np.squeeze(n_reflect_wall_all))
 
-                        logger.info(f'{n_img}  {n_reflect_wall_all.reshape([-1])}  {img_pos_all[n_img]}')
+                        # print log information
+                        logger.info(f'{n_img} {img_pos}  {n_reflect_wall_all}')
 
-        logger.removeHandler(file_handler)
-        # Complete impulse response for the source
         n_img = n_img + 1
         self.img_pos_all = img_pos_all[:n_img]
-        self.reflect_attenuate_all = reflect_attenuate_all
+        self.reflect_attenuate_all = reflect_attenuate_all[:n_img]
         self.n_img = n_img
 
+        logger.close()
+
         if is_plot:
-            self.room.show(extra_point=self.img_pos_all)
-            plt.title(f'{self.n_img}')
-            plt.show()
+            fig, ax = self.room.show(extra_point=self.img_pos_all)
+            plt.title(f'n_img: {self.n_img}')
+            return fig, ax
 
     def amp_spec_to_ir(self, amp_reflect):
         # interpolated grid points
@@ -230,30 +222,30 @@ class RoomSim(object):
         return ir
 
     def _cal_ir_1mic(self, mic, log_path):
+        logger = My_Logger(log_path)
+
         ir = np.zeros(self.ir_len)
-        # pb = ProcessBar(self.n_img)
-
-        logger = open(log_path, mode='w')
-
+        pb = ProcessBar(self.n_img)
         for img_i in np.arange(self.n_img):
-            # pb.update()
+            pb.update()
             if mic.direct_type == 'binaural_L' or mic.direct_type == 'binaural_R':
                 pos_img_to_mic = np.matmul(mic.tm_room.T, (self.img_pos_all[img_i] - self.receiver.pos))
             else:
                 pos_img_to_mic = np.matmul(mic.tm_room.T, (self.img_pos_all[img_i] - mic.pos_room))
             *angle_img_to_mic, dist = cartesian2pole(pos_img_to_mic)
             
+            logger.info(f'{img_i},{dist},{angle_img_to_mic[0]}\n')
+            
             # 
-            # logger.info(f'{img_i}  {dist:.2f}  {angle_img_to_mic}')
-
             pos_mic_to_img = np.matmul(self.source.tm.T, (mic.pos_room - self.img_pos_all[img_i]))
             *angle_mic_to_img, _ = cartesian2pole(pos_mic_to_img)
 
             reflect_amp = self.reflect_attenuate_all[img_i]
+
             # energy loss because of distance
             reflect_amp = reflect_amp/dist
-            # absorption due to air
 
+            # absorption due to air
             reflect_amp = reflect_amp*(self.air_attenuate_per_dist**dist)
 
             # calculate ir based on amp
@@ -261,19 +253,16 @@ class RoomSim(object):
             ir_tmp = self.amp_spec_to_ir(reflect_amp)
 
             # directivity of sound source, directivity after imaged
-            # ir_source = self.source.get_ir(angle_mic_to_img)
-            # ir_tmp = filter(ir_source, 1, ir_tmp)
+            ir_source = self.source.get_ir(angle_mic_to_img)
+            ir_tmp = filter(ir_source, 1, ir_tmp)
 
             # For primary sources, and image sources with impulse response
             # peak magnitudes >= -100dB (1/100000)
-            if True:  # np.max(np.abs(ir_tmp[:self.n_fft_half_valid])) >= self.reflect_amp_theta:
+            if np.max(np.abs(ir_tmp[:self.n_fft_half_valid])) >= self.reflect_amp_theta:
                 # mic directivity filter
-                ir_mic, azi_i, ele_i = mic.get_ir(angle_img_to_mic)
+                ir_mic = mic.get_ir(angle_img_to_mic)
                 if ir_mic is None:
                     continue
-                
-                logger.write(f'{img_i} {self.img_pos_all[img_i]} {dist}  {pos_img_to_mic}')
-                
                 ir_tmp = filter(ir_mic, 1, np.concatenate((ir_tmp, self.zero_padd_array)))
                 
                 # parse delay into integer and fraction.
@@ -298,23 +287,14 @@ class RoomSim(object):
                         ir[start_index_1: start_index_1+ir_len_tmp] + ir_tmp[:ir_len_tmp]
                 else:
                     # the remaining delay is larger than ir_len, give up
-                    logger.write(f'too larger delay   {delay_sample_num}\n')
+                    logger.info(f'too larger delay   {delay_sample_num}\n')
             else:
-                None
-                # logging.warning('give up small value')
+                logging.warning('give up small value')
 
         # High-pass filtering
         # when interpolating the spectrum of absorption, DC value is assigned to the value of 125Hz
         ir = self.HP_filter(ir)
-
         return ir
-
-    def make_file_logger(self, log_path):
-        logger = logging.getLogger()
-        file_handler = logging.FileHandler(log_path)
-        logger.addHandler(file_handler)
-        logger.setLevel(logging.INFO)
-        return logger, file_handler
 
     def cal_ir_mic(self):
         """
@@ -331,7 +311,7 @@ class RoomSim(object):
         return ir_all
 
     def cal_ir_reciver(self):
-        logger = self.make_file_logger('log/cal_ir_receiver.log')
+        log_path = 'log/cal_ir_receiver.log'
         ir = self._cal_ir_1mic(self.receiver, logger)
         return ir
     
@@ -374,23 +354,21 @@ if __name__ == '__main__':
                        'view': '90, 0, 0',
                        'direct_type': 'binaural_R'}
 
-    # logging.basicConfig(level=logging.INFO)
     roomsim = RoomSim(config)
-
     fig, ax = roomsim.show()
     fig.savefig('img/room.png')
-    # plt.show()
  
-    roomsim.get_img()
+    fig, ax = roomsim.get_img(is_plot=True)
+    fig.savefig('img/image_sources.png')
+    
     # roomsim.save_img_info()
-
     # roomsim.load_img_info()
-    rir = roomsim.cal_ir_mic()
 
+    rir = roomsim.cal_ir_mic()
     fig, ax = plt.subplots(1, 3)
     ax[0].plot(rir[:, 0])
     ax[1].plot(rir[:, 1])
     ax[2].plot(rir[:, 0] - rir[:, 1])
-    fig.savefig('rir.png')
+    fig.savefig('img/rir.png')
 
     np.save('rir.npy', rir)

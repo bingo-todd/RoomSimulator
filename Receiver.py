@@ -19,7 +19,7 @@ class Mic(object):
 
         self.directivity = Directivity(self.Fs)
         self.directivity.load(self.direct_type)
-        self.tm = view2tm(self.view)
+        self.tm = view2tm(-self.view)
         self.pos_room = None
         self.view_room = None
         self.tm_room = None
@@ -43,16 +43,16 @@ class Receiver(object):
     def __init__(self, config):
         self._load_config(config)
 
-        self.tm = view2tm(self.view)
+        self.tm = view2tm(-self.view)
 
-        self.direct_type = 'omnidirectional'  # do not considerate mic
+        self.direct_type = 'omnidirectional'  # 
         self.directivity = Directivity(self.Fs)
         self.directivity.load(self.direct_type)
         # combine transform matrix of receiver and mic
         # view of mic is relative to receiver
         for mic in self.mic_all:
             mic.pos_room = self.pos + mic.pos
-            mic.tm_room = np.matmul(self.tm, mic.tm)  # mic is roated with receiver, so receiver.tm * mic.tm * point.pos
+            mic.tm_room = np.matmul(mic.tm, self.tm) 
             mic.view_room = self.view + mic.view
 
     def _load_config(self, config):
@@ -98,13 +98,13 @@ class Receiver(object):
             ax.set_zlabel('z')
 
         mic_dist = cal_dist(self.mic_all[0].pos, self.mic_all[-1].pos)
-        direct_len = mic_dist/4
+        direct_len = mic_dist
         for mic_i, mic in enumerate(self.mic_all):
             if mic_i == 0:
                 label = 'Mic'
             else:
                 label = None
-            ax.plot([mic.pos_room[0]], [mic.pos_room[1]], [mic.pos_room[2]], 'ro', markersize=mic_dist/(self.n_mic+1)*200, 
+            ax.plot([mic.pos_room[0]], [mic.pos_room[1]], [mic.pos_room[2]], 'ro', markersize=mic_dist/(self.n_mic+1)*20, 
                      alpha=0.5, label=label)
             ax.quiver(*mic.pos_room, *mic.tm_room[:, 0]*direct_len, **x_arrow_plot_settings)
             ax.quiver(*mic.pos_room, *mic.tm_room[:, 1]*direct_len, **y_arrow_plot_settings)

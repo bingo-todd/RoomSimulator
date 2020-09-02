@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.signal
 import logging
+import os
 
 
 rad_per_degree = np.pi/180
@@ -39,6 +40,7 @@ def filter(b, a, x):
 class My_Logger(object):
     def __init__(self, log_path, log_level=logging.INFO):
         logger = logging.getLogger()
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
         file_handler = logging.FileHandler(log_path)
         logger.addHandler(file_handler)
         logger.setLevel(log_level)

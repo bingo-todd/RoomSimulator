@@ -27,8 +27,7 @@ def plot_cube(cube_size, extra_point=None, extra_point_marker='+',
          [0, 0, 1],
          [1, 0, 1],
          [1, 1, 1],
-         [0, 1, 1]]
-    )
+         [0, 1, 1]])
 
     if bright_color_all is None:
         color_all = [(1, 0, 0, 0.1),  # blue

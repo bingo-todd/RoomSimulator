@@ -2,7 +2,7 @@ import scipy.io
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from BasicTools import get_fpath, nd_index, wav_tools
+from BasicTools import get_file_path, nd_index, wav_tools
 import logging
 
 
@@ -92,6 +92,27 @@ class Directivity(object):
                 plt.close(fig)
 
     @classmethod
+    def validate_binaural(self, is_plot=True):
+        S3D_L = np.load(f'{self.direct_dir}/binaural_L.npy', allow_pickle=True)
+        S3D_R = np.load(f'{self.direct_dir}/binaural_R.npy', allow_pickle=True)
+        fig, ax = plt.subplots(5, 7, figsize=[12, 8], tight_layout=True, sharex=True, sharey=True)
+        for ele_i, ele in enumerate(range(-60, 61, 30)):
+            for azi_i, azi in enumerate(range(-180, 181, 60)):
+                ele_index = np.int(ele+90)
+                azi_index = np.int(azi+180)
+                ir_L = S3D_L[azi_index, ele_index]
+                azi_index = np.int(-azi+180)
+                ir_R = S3D_R[azi_index, ele_index]
+                if ir_L is None or ir_R is None:
+                    continue
+                ax[ele_i, azi_i].plot(ir_L-ir_R, linewidth=2, label='L')
+                # ax[ele_i, azi_i].plot(ir_R, linewidth=2, label='R')
+                ax[0, azi_i].set_title(f'{azi}')
+            ax[ele_i, 0].set_ylabel(f'{ele}')
+        ax[-1, -1].legend()
+        fig.savefig('img/directivity/binaural_simmetricity.png')
+
+    @classmethod
     def loadS3Dmat(self, file_path):
         data_mat = scipy.io.loadmat(file_path, squeeze_me=True)
         S3D = np.asarray(data_mat['S3D'], dtype=np.float32).T
@@ -100,13 +121,19 @@ class Directivity(object):
     @classmethod
     def mat2npy(self):
         for direct_type in self.direct_type_all:
+            if direct_type.startswith('binaural'):
+                continue
+            
             mat_path = f'{self.direct_dir}/{direct_type}.mat'
             S3D = self.loadS3Dmat(mat_path)
             npy_path = mat_path.replace('mat', 'npy')
             np.save(npy_path, S3D)
             print(npy_path)
+        
+            
 
 
 if __name__ == "__main__":
     # Directivity.mat2npy()
-    Directivity.validate(is_plot=True)
+    # Directivity.validate(is_plot=True)
+    Directivity.validate_binaural()

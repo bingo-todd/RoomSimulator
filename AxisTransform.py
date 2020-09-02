@@ -3,22 +3,19 @@ import numpy as np
 
 def view2tm(view):
     """
-    [psi, phi, theta]
-    +ve psi_rad is the yaw angle in the xy plane clockwise from the positive x axis (slew left).
-    +ve theta_rad is the pitch angle from the xy plane (nose up).1	
-    +ve phi_rad is roll clockwise about the +ve x axis (right wing dips).
+    Args:
+     view:[pitch, yaw, roll] counterclockwise rotation angles
+           pitch: rotation angle about x-axis
+           roll: rotation angle of about y-axis
+           yaw: rotation angle of about z-axis
     """
     view_rad = np.asarray(view)/180*np.pi
-    psi_c, phi_c, theta_c = np.cos(view_rad)
-    psi_s, phi_s, theta_s = np.sin(view_rad)
-    tm = np.array([
-        [theta_c * psi_c, theta_c * psi_s, -theta_s],
-        [-phi_s * theta_s * psi_c - phi_c * psi_s,
-         -phi_s * theta_s * psi_s + phi_c * psi_c,
-         -phi_s * theta_c],
-        [phi_c * theta_s * psi_c - phi_s * psi_s,
-                phi_c * theta_s * psi_s + phi_s * psi_c,
-         phi_c * theta_c]])
+    pitch_c, yaw_c, roll_c = np.cos(view_rad)
+    pitch_s, yaw_s, roll_s = np.sin(view_rad)
+    tm = np.array(
+         [[roll_c*yaw_c,     roll_c*yaw_s* pitch_s-roll_s*pitch_c, roll_c*yaw_s*pitch_c+roll_s*pitch_s],
+          [roll_s*yaw_c,     roll_s*yaw_s*pitch_s+roll_c*pitch_c,  roll_s*yaw_s*pitch_c-roll_c*pitch_s],   
+          [-yaw_s,           yaw_c*pitch_s,                        yaw_c*pitch_c]])
     return tm
 
 
@@ -39,9 +36,10 @@ def plot_ax(ax, tm):
           'color': [1, 165./255, 0],
           'linewidth': 2}
 
-     ax.quiver(*[0, 0, 0], *tm[:, 0], **x_arrow_plot_settings)
-     ax.quiver(*[0, 0, 0], *tm[:, 1], **y_arrow_plot_settings)
-     ax.quiver(*[0, 0, 0], *tm[:, 2], **z_arrow_plot_settings)
+     ax.quiver(*[0, 0, 0], *tm[:, 0], **x_arrow_plot_settings, label='x')
+     ax.quiver(*[0, 0, 0], *tm[:, 1], **y_arrow_plot_settings, label='y')
+     ax.quiver(*[0, 0, 0], *tm[:, 2], **z_arrow_plot_settings, label='z')
+     ax.legend()
 
      ax.set_xlabel('x')
      ax.set_ylabel('y')
@@ -61,20 +59,11 @@ if __name__ == "__main__":
 
      # rotate poin according to tm
      fig2 = plt.figure()
-     tm = view2tm([90, 0, 0])
+     tm = view2tm([0, 0, 90])
      ax2 = fig2.add_subplot(111, projection='3d')
      plot_ax(ax2, tm)
      pos_rotate_point = np.matmul(tm, pos_orig)
      ax2.scatter(*pos_rotate_point)
-
-
-     # calculate new position of the origin point in the rotated axis
-     fig3 = plt.figure()
-     tm = view2tm([90, 0, 0])
-     ax3 = fig3.add_subplot(111, projection='3d')
-     plot_ax(ax3, tm)
-     pos_rotate_axis = np.matmul(tm.T, pos_orig)
-     ax3.scatter(*pos_rotate_axis)
 
      plt.show()
 

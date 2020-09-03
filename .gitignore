@@ -4,4 +4,5 @@ log/
 tmp/
 pos_1_S1.mat
 test.py
-rir.npy
+rir.npy*.mat
+B_power_table.npy

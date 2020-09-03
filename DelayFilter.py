@@ -4,30 +4,24 @@ import matplotlib.pyplot as plt
 
 
 class DelayFilter(object):
-    def __init__(self, fs, delay, order=32, padd_len=None, f_high=None):
+    def __init__(self, fs, delay, order=128, padd_len=None, f_high=None):
         """
         fir delay filter
         Args:
             fs: sample frequency
             delay: time of delay to be implied, second
             order: order of filter
-            f_high: #
+            f_high: normalized frequency 
         Returns:
              b, a: coefficients of delay filter
         """
-        EPSILON = 1e-10
-        t_unit = 1./fs
         if f_high is None:
-            f_high = 0.9*fs/2.
-        f_high_norm = f_high/fs
+            f_high = 0.9
 
-        T = 1./fs
-        win_len = order*T  # Window duration (seconds)
-        t = np.arange(-win_len/2, win_len/2+EPSILON, T)
+        t_delayed = np.arange(order) - delay*fs
+        ir = (f_high*order*np.sinc(f_high*t_delayed)*np.cos(np.pi/order*t_delayed) + np.cos(f_high*np.pi*t_delayed))*f_high*order/(order*order)/f_high
 
-        t_delayed = t - delay
-        ir_filter = f_high_norm * (1 + np.cos(-2*np.pi*fs/order * t_delayed)) * np.sinc(2*f_high * t_delayed)
-        self.b = ir_filter
+        self.b = ir
         self.a = 1
         self.fs = fs
         self.delay = delay
@@ -59,15 +53,17 @@ def test():
     import os
     plot_settings = {'linewidth': 2}
 
-    delay_filter = DelayFilter(16000, 0.0005, 32)
-    x = np.zeros(200)
+    delay_filter = DelayFilter(16000, 0.0001, 1024, f_high=0.9)
+    x = np.zeros(1024)
     x[10] = 1
     y = delay_filter.filter(x)
 
-    fig, ax = plt.subplots(1, 1)
-    ax.plot(x, **plot_settings, label='origin')
-    ax.plot(y, **plot_settings, label='delayed')
-    plt.legend()
+    fig, ax = plt.subplots(2, 1)
+    ax[0].plot(x, **plot_settings, label='origin')
+    ax[0].plot(y, **plot_settings, label='delayed')
+    ax[0].legend()
+    ax[1].plot(np.abs(np.fft.fft(x)), label='origin')
+    ax[1].plot(np.abs(np.fft.fft(y)), label='delayed')
     os.makedirs('img', exist_ok=True)
     fig.savefig('img/delay_filter.png')
     plt.show()

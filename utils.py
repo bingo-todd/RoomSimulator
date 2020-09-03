@@ -51,6 +51,9 @@ class My_Logger(object):
     def info(self, log_str):
         self.logger.info(log_str)
     
+    def warning(self, log_str):
+        self.logger.warning(log_str)
+    
     def close(self):
         self.logger.removeHandler(self.file_handler)
         del self.logger

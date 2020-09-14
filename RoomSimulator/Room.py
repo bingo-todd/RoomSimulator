@@ -1,6 +1,6 @@
 import numpy as np
-from Reverb import RT2Absorb, Absorb2RT
-from plot_cube import plot_cube
+from .Reverb import RT2Absorb, Absorb2RT
+from .plot_cube import plot_cube
 
 
 class ShoeBox(object):

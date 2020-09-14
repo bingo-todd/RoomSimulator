@@ -8,12 +8,16 @@ def main():
 
     rir_python = np.load('rir.npy')
 
-    fig, ax = plt.subplots(2, 1, sharex=True, sharey=True)
-    ax[0].plot(rir_matlab[:, 0])
-    ax[0].plot(rir_python[:, 0])
+    fig, ax = plt.subplots(1, 2, sharex=True, sharey=True, 
+            tight_layout=True, figsize=(8, 3))
+    ax[0].plot(rir_matlab[:, 0], label='roomsim')
+    ax[0].plot(rir_python[:, 0], label='roomsimulator')
+    ax[0].set_title('left ear')
+    ax[0].legend()
     ax[1].plot(rir_matlab[:, 1])
     ax[1].plot(rir_python[:, 1])
-    plt.show()
+    ax[1].set_title('right ear')
+    fig.savefig('../images/validation.png', dpi=100)
 
 
 

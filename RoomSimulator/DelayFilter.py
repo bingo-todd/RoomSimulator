@@ -49,25 +49,3 @@ class DelayFilter(object):
         return y
 
 
-def test():
-    import os
-    plot_settings = {'linewidth': 2}
-
-    delay_filter = DelayFilter(16000, 0.0001, 1024, f_high=0.9)
-    x = np.zeros(1024)
-    x[10] = 1
-    y = delay_filter.filter(x)
-
-    fig, ax = plt.subplots(2, 1)
-    ax[0].plot(x, **plot_settings, label='origin')
-    ax[0].plot(y, **plot_settings, label='delayed')
-    ax[0].legend()
-    ax[1].plot(np.abs(np.fft.fft(x)), label='origin')
-    ax[1].plot(np.abs(np.fft.fft(y)), label='delayed')
-    os.makedirs('img', exist_ok=True)
-    fig.savefig('img/delay_filter.png')
-    plt.show()
-
-
-if __name__ == '__main__':
-    test()

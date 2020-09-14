@@ -2,9 +2,10 @@ import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 import os
-from AxisTransform import view2tm
-from Directivity import Directivity
-from utils import cal_dist, pole2cartesian, cartesian2pole
+
+from .AxisTransform import view2tm
+from .Directivity import Directivity
+from .utils import cal_dist, pole2cartesian, cartesian2pole
 
 
 class Mic(object):

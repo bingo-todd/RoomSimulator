@@ -2,8 +2,9 @@ import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 import os
-from AxisTransform import view2tm
-from Directivity import Directivity
+
+from .AxisTransform import view2tm
+from .Directivity import Directivity
 
 
 class Source(object):

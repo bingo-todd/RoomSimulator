@@ -2,12 +2,12 @@ import scipy.io
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from BasicTools import get_file_path, nd_index, wav_tools
 import logging
+from BasicTools import get_file_path, nd_index, wav_tools
 
 
 class Directivity(object):
-    direct_dir = 'SENSOR/Types'
+    direct_dir = f'{os.path.dirname(__file__)}/SENSOR/Types'
     direct_type_all = [
         'bidirectional', 'cardoid', 'dipole', 'hemisphere',
         'hypercardoid', 'null_sensor', 'omnidirectional',

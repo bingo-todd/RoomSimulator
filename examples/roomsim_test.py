@@ -14,8 +14,8 @@ if __name__ == '__main__':
         'size': '4, 4, 4',
         'RT60': ', '.join([f'{item}' for item in np.ones(6) * 0.2]),
         'A': '',
-        'Fs': 44100,
-        'reflect_order': -1,
+        'Fs': 8000,
+        'reflect_order': 10,
         'HP_cutoff': 100}
 
     receiver_config = configparser.ConfigParser()
@@ -44,7 +44,7 @@ if __name__ == '__main__':
         'directivity':'omnidirectional'}
     roomsim.load_source_config(source_config)
     fig, ax = roomsim.show()
-    ax.rotate_init(elev=60, azim=30)
+    ax.view_init(elev=60, azim=30)
     fig.savefig(f'../images/room.png', dpi=200)
     plt.close(fig)
          

@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import scipy.signal
 import logging
@@ -38,22 +39,14 @@ def filter(b, a, x):
 
 
 class My_Logger(object):
-    def __init__(self, log_path, log_level=logging.INFO):
-        logger = logging.getLogger()
-        os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        file_handler = logging.FileHandler(log_path)
-        logger.addHandler(file_handler)
-        logger.setLevel(log_level)
-        
-        self.logger = logger
-        self.file_handler = file_handler
+    def __init__(self, log_path):
+        self.logger = open(log_path, 'w')
 
     def info(self, log_str):
-        self.logger.info(log_str)
+        self.logger.write(f'{time.ctime()} {log_str} \n')
     
     def warning(self, log_str):
-        self.logger.warning(log_str)
+        self.logger.write(f'{time.ctime()} {log_str} \n')
     
     def close(self):
-        self.logger.removeHandler(self.file_handler)
-        del self.logger
+        self.logger.close()

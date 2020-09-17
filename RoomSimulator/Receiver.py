@@ -26,7 +26,7 @@ class Mic(object):
         self.tm_room = None
 
     def _load_config(self, config):
-        self.Fs = np.float(config['Fs'])
+        self.Fs = np.int(config['Fs'])
         self.pos = np.asarray([np.float32(item) for item in config['pos'].split(',')])
         self.rotate = np.asarray([np.float32(item) for item in config['rotate'].split(',')])
         self.direct_type = config['direct_type']
@@ -58,7 +58,7 @@ class Receiver(object):
 
     def _load_config(self, config):
         config_receiver = config['Receiver']
-        self.Fs = np.float(config_receiver['Fs'])
+        self.Fs = np.int(config_receiver['Fs'])
         self.pos = np.asarray([np.float32(item) for item in config_receiver['pos'].split(',')])
         self.rotate = np.asarray([np.float32(item) for item in config_receiver['rotate'].split(',')])
         self.n_mic = np.int32(config_receiver['n_mic'])

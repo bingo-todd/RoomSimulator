@@ -42,10 +42,16 @@ class Directivity(object):
 
         # MIT HRIR Fs=44100, if input Fs is not 44100, resample S3D
         if self.Fs is not None and self.Fs != 44100 and self.S3D.dtype == object:
-            logging.warning(f'resample hrir from 44100 to {self.Fs}')
-            print('resample')
-            for i, j in self.valid_index_all:
-                self.S3D[i, j] = wav_tools.resample(self.S3D[i, j], 44100, self.Fs)
+            resampled_S3D_path = f'{self.direct_dir}/{direct_type}_{self.Fs:.0f}.npy'
+            if not os.path.exists(resampled_S3D_path):
+                logging.warning(f'resample hrir from 44100 to {self.Fs}')
+                print('resample')
+                for i, j in self.valid_index_all:
+                    self.S3D[i, j] = wav_tools.resample(self.S3D[i, j], 44100, self.Fs)
+                np.save(resampled_S3D_path, self.S3D)
+                print(f'sampled S3D is saved to {resampled_S3D_path}')
+            else:
+                self.S3D = np.load(resampled_S3D_path, allow_pickle=True)
 
     @classmethod
     def angle2index(self, angle):

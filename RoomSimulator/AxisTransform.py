@@ -1,17 +1,17 @@
 import numpy as np
 
 
-def view2tm(view):
+def rotate2tm(rotate):
     """
     Args:
-     view:[pitch, yaw, roll] counterclockwise rotation angles
+     rotate:[pitch, yaw, roll] counterclockwise rotation angles
            pitch: rotation angle about x-axis
            roll: rotation angle of about y-axis
            yaw: rotation angle of about z-axis
     """
-    view_rad = np.asarray(view)/180*np.pi
-    pitch_c, yaw_c, roll_c = np.cos(view_rad)
-    pitch_s, yaw_s, roll_s = np.sin(view_rad)
+    rotate_rad = np.asarray(rotate)/180*np.pi
+    pitch_c, yaw_c, roll_c = np.cos(rotate_rad)
+    pitch_s, yaw_s, roll_s = np.sin(rotate_rad)
     tm = np.array(
          [[roll_c*yaw_c,     roll_c*yaw_s* pitch_s-roll_s*pitch_c, roll_c*yaw_s*pitch_c+roll_s*pitch_s],
           [roll_s*yaw_c,     roll_s*yaw_s*pitch_s+roll_c*pitch_c,  roll_s*yaw_s*pitch_c-roll_c*pitch_s],   
@@ -52,14 +52,14 @@ if __name__ == "__main__":
      pos_orig = np.asarray([4, 4, 4])
 
      fig = plt.figure()
-     tm = view2tm([0, 0, 0])
+     tm = rotate2tm([0, 0, 0])
      ax = fig.add_subplot(111, projection='3d')
      plot_ax(ax, tm)
      ax.scatter(*pos_orig)
 
      # rotate poin according to tm
      fig2 = plt.figure()
-     tm = view2tm([0, 0, 90])
+     tm = rotate2tm([0, 0, 90])
      ax2 = fig2.add_subplot(111, projection='3d')
      plot_ax(ax2, tm)
      pos_rotate_point = np.matmul(tm, pos_orig)

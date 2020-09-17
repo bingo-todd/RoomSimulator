@@ -8,7 +8,6 @@ import logging
 
 from BasicTools import ProcessBar
 
-from .AxisTransform import view2tm
 from .DelayFilter import DelayFilter
 from .Reverb import RT2Absorb
 from .Room import ShoeBox

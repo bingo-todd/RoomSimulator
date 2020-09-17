@@ -3,7 +3,7 @@ import scipy.io as sio
 import matplotlib.pyplot as plt
 import os
 
-from .AxisTransform import view2tm
+from .AxisTransform import rotate2tm
 from .Directivity import Directivity
 from .utils import cal_dist, pole2cartesian, cartesian2pole
 
@@ -13,22 +13,22 @@ class Mic(object):
         """
         direct_type: directivity type of mic
         pos: position relative to the device it is mounted
-        view: azimuth, elevation, roll angle shift relative to device it is mounted
+        rotate: azimuth, elevation, roll angle shift relative to device it is mounted
         """
 
         self._load_config(config)
 
         self.directivity = Directivity(self.Fs)
         self.directivity.load(self.direct_type)
-        self.tm = view2tm(-self.view)
+        self.tm = rotate2tm(-self.rotate)
         self.pos_room = None
-        self.view_room = None
+        self.rotate_room = None
         self.tm_room = None
 
     def _load_config(self, config):
         self.Fs = np.float(config['Fs'])
         self.pos = np.asarray([np.float32(item) for item in config['pos'].split(',')])
-        self.view = np.asarray([np.float32(item) for item in config['view'].split(',')])
+        self.rotate = np.asarray([np.float32(item) for item in config['rotate'].split(',')])
         self.direct_type = config['direct_type']
 
     def get_ir(self, angle):
@@ -44,23 +44,23 @@ class Receiver(object):
     def __init__(self, config):
         self._load_config(config)
 
-        self.tm = view2tm(-self.view)
+        self.tm = rotate2tm(-self.rotate)
 
         self.direct_type = 'omnidirectional'  # 
         self.directivity = Directivity(self.Fs)
         self.directivity.load(self.direct_type)
         # combine transform matrix of receiver and mic
-        # view of mic is relative to receiver
+        # rotate of mic is relative to receiver
         for mic in self.mic_all:
             mic.pos_room = self.pos + mic.pos
             mic.tm_room = np.matmul(mic.tm, self.tm) 
-            mic.view_room = self.view + mic.view
+            mic.rotate_room = self.rotate + mic.rotate
 
     def _load_config(self, config):
         config_receiver = config['Receiver']
         self.Fs = np.float(config_receiver['Fs'])
         self.pos = np.asarray([np.float32(item) for item in config_receiver['pos'].split(',')])
-        self.view = np.asarray([np.float32(item) for item in config_receiver['view'].split(',')])
+        self.rotate = np.asarray([np.float32(item) for item in config_receiver['rotate'].split(',')])
         self.n_mic = np.int32(config_receiver['n_mic'])
 
         # configure about microphone
@@ -105,7 +105,7 @@ class Receiver(object):
                 label = None
             ax.plot([mic.pos_room[0]], [mic.pos_room[1]], [mic.pos_room[2]], 'ko', markersize=8, 
                      alpha=0.5, label=label)
-            mic_tm_room = np.matmul(view2tm(mic.view), self.tm) 
+            mic_tm_room = np.matmul(rotate2tm(mic.rotate), self.tm) 
             ax.quiver(*mic.pos_room, *mic_tm_room[:, 0]*arrow_len, **x_arrow_plot_settings)
             ax.quiver(*mic.pos_room, *mic_tm_room[:, 1]*arrow_len, **y_arrow_plot_settings)
             ax.quiver(*mic.pos_room, *mic_tm_room[:, 2]*arrow_len, **z_arrow_plot_settings)
@@ -114,7 +114,7 @@ class Receiver(object):
             ax.quiver(*(self.mic_all[0].pos+self.pos), *(self.mic_all[-1].pos-self.mic_all[0].pos), alpha=0.2,
                       **line_plot_settings)
             # direction of receiver
-            receiver_tm = view2tm(self.view)
+            receiver_tm = rotate2tm(self.rotate)
             pos_receiver_center = (self.mic_all[0].pos_room + self.mic_all[-1].pos_room)/2
             ax.quiver(*pos_receiver_center, *receiver_tm[:,0]*arrow_len, label='x_direct', **x_arrow_plot_settings)
             ax.quiver(*pos_receiver_center, *receiver_tm[:,1]*arrow_len, label='y_direct', **y_arrow_plot_settings)
@@ -128,13 +128,13 @@ if __name__ == '__main__':
     config = configparser.ConfigParser()
     config['Receiver'] = {'Fs': '44100',
                           'pos': '0, 0, 0',
-                          'view': '0, 0, 0',
+                          'rotate': '0, 0, 0',
                           'n_mic': '2'}
     config['Mic_0'] = {'pos': '0, 5, 0',
-                       'view': '-90, 0, 0',
+                       'rotate': '-90, 0, 0',
                        'direct_type': 'binaural_L'}
     config['Mic_1'] = {'pos': '0, -5, 0',
-                       'view': '90, 0, 0',
+                       'rotate': '90, 0, 0',
                        'direct_type': 'binaural_R'}
     receiver = Receiver(config)
 

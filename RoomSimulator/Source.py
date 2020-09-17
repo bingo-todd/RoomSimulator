@@ -3,7 +3,7 @@ import scipy.io as sio
 import matplotlib.pyplot as plt
 import os
 
-from .AxisTransform import view2tm
+from .AxisTransform import rotate2tm
 from .Directivity import Directivity
 
 
@@ -11,19 +11,19 @@ class Source(object):
     def __init__(self, config):
         """
         pos: position of source in room
-        view: azimuth, elevation, roll angle of sound source
+        rotate: azimuth, elevation, roll angle of sound source
         direct_type: directivity type of source
         """
         self._load_config(config)
         
         self.directivity = Directivity(self.Fs)
         self.directivity.load(self.direct_type)
-        self.tm = view2tm(self.view)
+        self.tm = rotate2tm(self.rotate)
 
     def _load_config(self, config):
         self.Fs = np.float(config['Fs'])
         self.pos = np.asarray([np.float32(item) for item in config['pos'].split(',')])
-        self.view = np.asarray([np.float32(item) for item in config['view'].split(',')])
+        self.rotate = np.asarray([np.float32(item) for item in config['rotate'].split(',')])
         self.direct_type = config['directivity']
 
     @staticmethod
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     import configparser
     config = configparser.ConfigParser()
     config['Source'] = {'pos': '0 0 0',
-                        'view': '0 0 0',
+                        'rotate': '0 0 0',
                         'direct_type': 'omnidirectional'}
     source = Source(config['Source'])
     source.show()

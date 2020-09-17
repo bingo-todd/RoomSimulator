@@ -4,18 +4,18 @@ import numpy as np
 def rotate2tm(rotate):
     """
     Args:
-     rotate:[pitch, yaw, roll] counterclockwise rotation angles
-           pitch: rotation angle about x-axis
-           roll: rotation angle of about y-axis
+     rotate:[roll, pitch, yaw] counterclockwise rotation angles
+           roll: rotation angle about x-axis
+           pitch: rotation angle of about y-axis
            yaw: rotation angle of about z-axis
     """
     rotate_rad = np.asarray(rotate)/180*np.pi
-    pitch_c, yaw_c, roll_c = np.cos(rotate_rad)
-    pitch_s, yaw_s, roll_s = np.sin(rotate_rad)
+    roll_c, pitch_c, yaw_c = np.cos(rotate_rad)
+    roll_s, pitch_s, yaw_s = np.sin(rotate_rad)
     tm = np.array(
-         [[roll_c*yaw_c,     roll_c*yaw_s* pitch_s-roll_s*pitch_c, roll_c*yaw_s*pitch_c+roll_s*pitch_s],
-          [roll_s*yaw_c,     roll_s*yaw_s*pitch_s+roll_c*pitch_c,  roll_s*yaw_s*pitch_c-roll_c*pitch_s],   
-          [-yaw_s,           yaw_c*pitch_s,                        yaw_c*pitch_c]])
+         [[pitch_c*yaw_c,                       -pitch_c*yaw_s,                     pitch_s],
+          [roll_c*yaw_s+yaw_c*roll_s*pitch_s,   roll_c*yaw_c-roll_s*pitch_s*yaw_s,  -pitch_c*roll_s],   
+          [roll_s*yaw_s,                        yaw_c*roll_s+roll_c*pitch_s*yaw_s,  roll_c*pitch_c]])
     return tm
 
 
@@ -54,16 +54,25 @@ if __name__ == "__main__":
      fig = plt.figure()
      tm = rotate2tm([0, 0, 0])
      ax = fig.add_subplot(111, projection='3d')
-     plot_ax(ax, tm)
-     ax.scatter(*pos_orig)
+     ax.scatter(0, 0, 0, label='o')
+     # plot_ax(ax, tm)
+     ax.scatter(*pos_orig, label='origin')
 
-     # rotate poin according to tm
-     fig2 = plt.figure()
-     tm = rotate2tm([0, 0, 90])
-     ax2 = fig2.add_subplot(111, projection='3d')
-     plot_ax(ax2, tm)
-     pos_rotate_point = np.matmul(tm, pos_orig)
-     ax2.scatter(*pos_rotate_point)
+     tm_z = rotate2tm([0, 0, 30])
+     pos_rotate_point = np.matmul(tm_z, pos_orig)
+     ax.scatter(*pos_rotate_point, label='z')
+
+     tm_y = rotate2tm([0, 30, 0])
+     pos_rotate_point = np.matmul(tm_y, pos_orig)
+     ax.scatter(*pos_rotate_point, label='y')
+
+     tm_x = rotate2tm([30, 0, 0])
+     pos_rotate_point = np.matmul(tm_x, pos_orig)
+     ax.scatter(*pos_rotate_point, label='x')
+
+     ax.set_xlabel('x')
+     ax.set_ylabel('y')
+     ax.legend()
 
      plt.show()
 

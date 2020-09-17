@@ -22,7 +22,6 @@ class Mic(object):
         self.directivity.load(self.direct_type)
         self.tm = rotate2tm(-self.rotate)
         self.pos_room = None
-        self.rotate_room = None
         self.tm_room = None
 
     def _load_config(self, config):
@@ -53,8 +52,7 @@ class Receiver(object):
         # rotate of mic is relative to receiver
         for mic in self.mic_all:
             mic.pos_room = self.pos + mic.pos
-            mic.tm_room = np.matmul(mic.tm, self.tm) 
-            mic.rotate_room = self.rotate + mic.rotate
+            mic.tm_room = np.matmul(self.tm, mic.tm) 
 
     def _load_config(self, config):
         config_receiver = config['Receiver']
@@ -74,21 +72,21 @@ class Receiver(object):
             'arrow_length_ratio': 0.4,
             'pivot': 'tail',
             'color': [1, 20./255, 147./255],
-            'linewidth': 2}
+            'linewidth': 1}
         y_arrow_plot_settings = {
             'arrow_length_ratio': 0.4,
             'pivot': 'tail',
             'color': [155./255, 48./255, 1],
-            'linewidth': 2}
+            'linewidth': 1}
         z_arrow_plot_settings = {
             'arrow_length_ratio': 0.4,
             'pivot': 'tail',
             'color': [1, 165./255, 0],
-            'linewidth': 2}
+            'linewidth': 1}
         line_plot_settings = {
             'arrow_length_ratio': 0,
             'pivot': 'tail',
-            'linewidth': 2,
+            'linewidth': 1,
             'color': 'black'}
 
         if ax is None:
@@ -98,28 +96,29 @@ class Receiver(object):
             ax.set_ylabel('y')
             ax.set_zlabel('z')
 
+        receiver_tm = rotate2tm(self.rotate)
+        if receiver_type == 'linear':
+            ax.quiver(*(self.mic_all[0].pos+self.pos), *(self.mic_all[-1].pos-self.mic_all[0].pos), alpha=0.2,
+                      **line_plot_settings)
+            # direction of receiver
+            pos_receiver_center = self.pos
+            ax.quiver(*pos_receiver_center, *receiver_tm[:,0]*arrow_len, label='x_direct', **x_arrow_plot_settings)
+            ax.quiver(*pos_receiver_center, *receiver_tm[:,1]*arrow_len, label='y_direct', **y_arrow_plot_settings)
+            ax.quiver(*pos_receiver_center, *receiver_tm[:,2]*arrow_len, label='z_direct', **z_arrow_plot_settings)
+ 
         for mic_i, mic in enumerate(self.mic_all):
             if mic_i == 0:
                 label = 'Mic'
             else:
                 label = None
-            ax.plot([mic.pos_room[0]], [mic.pos_room[1]], [mic.pos_room[2]], 'ko', markersize=8, 
+            ax.plot([mic.pos_room[0]], [mic.pos_room[1]], [mic.pos_room[2]], 'ko', markersize=3, 
                      alpha=0.5, label=label)
-            mic_tm_room = np.matmul(rotate2tm(mic.rotate), self.tm) 
-            ax.quiver(*mic.pos_room, *mic_tm_room[:, 0]*arrow_len, **x_arrow_plot_settings)
-            ax.quiver(*mic.pos_room, *mic_tm_room[:, 1]*arrow_len, **y_arrow_plot_settings)
-            ax.quiver(*mic.pos_room, *mic_tm_room[:, 2]*arrow_len, **z_arrow_plot_settings)
-
-        if receiver_type == 'linear':
-            ax.quiver(*(self.mic_all[0].pos+self.pos), *(self.mic_all[-1].pos-self.mic_all[0].pos), alpha=0.2,
-                      **line_plot_settings)
-            # direction of receiver
-            receiver_tm = rotate2tm(self.rotate)
-            pos_receiver_center = (self.mic_all[0].pos_room + self.mic_all[-1].pos_room)/2
-            ax.quiver(*pos_receiver_center, *receiver_tm[:,0]*arrow_len, label='x_direct', **x_arrow_plot_settings)
-            ax.quiver(*pos_receiver_center, *receiver_tm[:,1]*arrow_len, label='y_direct', **y_arrow_plot_settings)
-            ax.quiver(*pos_receiver_center, *receiver_tm[:,2]*arrow_len, label='z_direct', **z_arrow_plot_settings)
-            
+            mic_tm = rotate2tm(mic.rotate)
+            mic_tm_comined = np.matmul(receiver_tm, mic_tm)
+            ax.quiver(*mic.pos_room, *mic_tm_comined[:, 0]*arrow_len, **x_arrow_plot_settings)
+            ax.quiver(*mic.pos_room, *mic_tm_comined[:, 1]*arrow_len, **y_arrow_plot_settings)
+            ax.quiver(*mic.pos_room, *mic_tm_comined[:, 2]*arrow_len, **z_arrow_plot_settings)
+   
     plt.show()
 
 

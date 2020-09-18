@@ -25,13 +25,11 @@ class ShoeBox(object):
             self.RT60 = Absorb2RT(self.A, room_size=self.size)
         self.B = np.sqrt(1 - self.A)  # reflection coefficients
 
-    def show(self, extra_point=None, show_absorption=False):
+    def show(self, ax=None, extra_point=None, show_absorption=False):
         if not show_absorption:
-            fig, ax = plot_cube(self.size, extra_point)
+            fig, ax = plot_cube(self.size, ax, extra_point)
         else:
-            print(np.mean(self.A, axis=1))
-            print(self.A.shape)
-            fig, ax = plot_cube(self.size, extra_point, bright_color_all=np.mean(self.A, axis=1))
+            fig, ax = plot_cube(self.size, ax, extra_point, bright_color_all=np.mean(self.A, axis=1))
         return fig, ax
 
     def show_xy(self, ax, fig_path=None):

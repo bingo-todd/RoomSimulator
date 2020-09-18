@@ -129,20 +129,24 @@ class RoomSimulator(object):
             config['Receiver']['Fs'] = f'{self.Fs}'
             self.receiver = Receiver(config)
 
-    def show(self, is_zoom=False):
+    def show(self, ax=None, is_zoom=False):
         """"""
-        fig, ax = self.room.show()
+
+        fig, ax = self.room.show(ax)
+
         ax.scatter(*self.source.pos, 'ro', label='source')
         self.receiver.show(ax, arrow_len=0.5)
         ax.set_xlabel('x')
         ax.set_ylabel('y')
-        
-        min_x = min((self.receiver.pos[0], self.source.pos[0])) - 0.5
-        max_x = max((self.receiver.pos[0], self.source.pos[0])) + 0.5
-        min_y = min((self.receiver.pos[1], self.source.pos[1])) - 0.5
-        max_y = max((self.receiver.pos[1], self.source.pos[1])) + 0.5
-        ax.set_xlim([min_x, max_x])
-        ax.set_ylim([min_y, max_y])
+       
+        if is_zoom: 
+            min_x = min((self.receiver.pos[0], self.source.pos[0])) - 0.5
+            max_x = max((self.receiver.pos[0], self.source.pos[0])) + 0.5
+            min_y = min((self.receiver.pos[1], self.source.pos[1])) - 0.5
+            max_y = max((self.receiver.pos[1], self.source.pos[1])) + 0.5
+            ax.set_xlim([min_x, max_x])
+            ax.set_ylim([min_y, max_y])
+
         ax.legend()
         return fig, ax
 

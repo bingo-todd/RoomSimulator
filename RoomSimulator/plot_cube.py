@@ -15,8 +15,14 @@ def axisEqual3D(ax):
         getattr(ax, 'set_{}lim'.format(dim))(ctr - r, ctr + r)
 
 
-def plot_cube(cube_size, extra_point=None, extra_point_marker='+',
+def plot_cube(cube_size, ax=None, extra_point=None, extra_point_marker='+',
               orig_point=None, bright_color_all=None):
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+    else:
+        fig = None
+
     if orig_point is None:
         orig_point = [0, 0, 0]
     point_all_unit_cube = np.asarray(
@@ -54,8 +60,6 @@ def plot_cube(cube_size, extra_point=None, extra_point_marker='+',
         [point_all[4], point_all[5], point_all[6], point_all[7]]   # z=z_max
     ]
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
     face_all = Poly3DCollection(edge_all, linewidths=1, edgecolors='k')
     face_all.set_facecolor(color_all)
     ax.add_collection3d(face_all)
@@ -75,6 +79,7 @@ def plot_cube(cube_size, extra_point=None, extra_point_marker='+',
 
     # ax.set_aspect('equal')
     axisEqual3D(ax)
+
     return fig, ax
 
 

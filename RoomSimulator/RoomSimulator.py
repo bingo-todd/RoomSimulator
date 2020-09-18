@@ -172,11 +172,29 @@ class RoomSimulator(object):
             return filter(*self._HP_filter_coef, x)
 
     def local_power(self, x, n):
-        key = f'{x}_{n}'
+        key = f'{x:.4f}_{n}'
         if key in self.B_power_table.keys():
             y = self.B_power_table[key]
         else:
-            y = np.power(x, n)
+            key_matched = [key for key in self.B_power_table.keys() if key.split('_')[0]==f'{x:.4f}']
+            exp_all = list(map(lambda x: int(x.split('_')[1]), key_matched))
+            exp_all.sort()
+
+            n_remain = n
+            y_tmp = 1
+            while len(exp_all) > 0 and n_remain > exp_all[0]:
+                while exp_all[-1] > n_remain:
+                    exp_all = [*exp_all[:-1]]
+                n_sub = exp_all[-1]
+                y_tmp = y_tmp * self.B_power_table[f'{x:.4f}_{n_sub}']
+                n_remain = n_remain - n_sub
+
+            if n_remain < 0:
+                print('negative exponent')
+                return None
+
+            y = y_tmp * (x**n_remain)
+
             self.B_power_table[key] = y
         return y
 
@@ -208,13 +226,15 @@ class RoomSimulator(object):
                 for cube_i_z in np.arange(-self.n_cube_xyz[2], self.n_cube_xyz[2]+1):
                     cube_pos_z = cube_i_z * self.room.size_double[2]
                     cube_pos = np.asarray([cube_pos_x, cube_pos_y, cube_pos_z])
-                    n_reflect_xyz1 = np.abs(np.asarray([cube_i_y, cube_i_x, cube_i_z]))
+                    n_reflect_xyz1 = np.abs(np.asarray([cube_i_y, cube_i_x, cube_i_z], dtype=np.int))
                     
                     for i in np.arange(self.n_img_in_cube):
                         n_img = n_img+1
                         img_pos_all[n_img] = cube_pos + img_pos_in_cube0[i]
 
-                        n_refl_xyz0 = np.abs(np.asarray([cube_i_y, cube_i_x, cube_i_z]) - self.rel_refl_num_in_cube[i])
+                        n_refl_xyz0 = np.abs(
+                                np.asarray([cube_i_y, cube_i_x, cube_i_z], dtype=np.int) 
+                                - self.rel_refl_num_in_cube[i])
                         n_refl = np.concatenate((n_refl_xyz0, n_reflect_xyz1))
                         reflect_gain_all[n_img] = self.cal_wall_attenuate(np.squeeze(n_refl))
                         if np.sum(reflect_gain_all[n_img]) < self.amp_theta:

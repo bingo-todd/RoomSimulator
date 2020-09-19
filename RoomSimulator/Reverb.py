@@ -56,7 +56,9 @@ def Absorb2RT(A, room_size, F_abs=None, c=343, A_air=None, estimator='Norris_Eyr
 
 
 def RT2Absorb(RT60, room_size, F_abs=None, c=343, A_air=None, estimator='Norris_Eyring'):
-
+    if RT60 < 1e-10:
+        return np.ones((6, 6), dtype=np.float32)
+    
     if F_abs is None:
         F_abs = np.asarray([125, 250, 500, 1000, 2000, 4000])
 

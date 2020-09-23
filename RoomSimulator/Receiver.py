@@ -1,11 +1,9 @@
 import numpy as np
-import scipy.io as sio
 import matplotlib.pyplot as plt
 import os
 
 from .AxisTransform import rotate2tm
 from .Directivity import Directivity
-from .utils import cal_dist, pole2cartesian, cartesian2pole
 
 
 class Mic(object):
@@ -13,7 +11,8 @@ class Mic(object):
         """
         direct_type: directivity type of mic
         pos: position relative to the device it is mounted
-        rotate: azimuth, elevation, roll angle shift relative to device it is mounted
+        rotate: azimuth, elevation, roll angle shift relative to device it is
+            mounted
         """
 
         self._load_config(config)
@@ -26,8 +25,10 @@ class Mic(object):
 
     def _load_config(self, config):
         self.Fs = np.int(config['Fs'])
-        self.pos = np.asarray([np.float32(item) for item in config['pos'].split(',')])
-        self.rotate = np.asarray([np.float32(item) for item in config['rotate'].split(',')])
+        self.pos = np.asarray([np.float32(item)
+                               for item in config['pos'].split(',')])
+        self.rotate = np.asarray([np.float32(item)
+                                  for item in config['rotate'].split(',')])
         self.direct_type = config['direct_type']
 
     def get_ir(self, angle):
@@ -45,20 +46,23 @@ class Receiver(object):
 
         self.tm = rotate2tm(-self.rotate)
 
-        self.direct_type = 'omnidirectional'  # 
+        self.direct_type = 'omnidirectional'  #
         self.directivity = Directivity(self.Fs)
         self.directivity.load(self.direct_type)
         # combine transform matrix of receiver and mic
         # rotate of mic is relative to receiver
         for mic in self.mic_all:
             mic.pos_room = self.pos + mic.pos
-            mic.tm_room = np.matmul(self.tm, mic.tm) 
+            mic.tm_room = np.matmul(self.tm, mic.tm)
 
     def _load_config(self, config):
         config_receiver = config['Receiver']
         self.Fs = np.int(config_receiver['Fs'])
-        self.pos = np.asarray([np.float32(item) for item in config_receiver['pos'].split(',')])
-        self.rotate = np.asarray([np.float32(item) for item in config_receiver['rotate'].split(',')])
+        self.pos = np.asarray(
+            [np.float32(item) for item in config_receiver['pos'].split(',')])
+        self.rotate = np.asarray(
+            [np.float32(item)
+             for item in config_receiver['rotate'].split(',')])
         self.n_mic = np.int32(config_receiver['n_mic'])
 
         # configure about microphone
@@ -67,7 +71,7 @@ class Receiver(object):
             config[f'Mic_{mic_i}']['Fs'] = f'{self.Fs}'
             self.mic_all.append(Mic(config[f'Mic_{mic_i}']))
 
-    def show(self, ax=None, receiver_type='linear', arrow_len=1):
+    def visualize(self, ax=None, receiver_type='linear', arrow_len=1):
         x_arrow_plot_settings = {
             'arrow_length_ratio': 0.4,
             'pivot': 'tail',
@@ -98,27 +102,34 @@ class Receiver(object):
 
         receiver_tm = rotate2tm(self.rotate)
         if receiver_type == 'linear':
-            ax.quiver(*(self.mic_all[0].pos+self.pos), *(self.mic_all[-1].pos-self.mic_all[0].pos), alpha=0.2,
+            ax.quiver(*(self.mic_all[0].pos+self.pos),
+                      *(self.mic_all[-1].pos-self.mic_all[0].pos), alpha=0.2,
                       **line_plot_settings)
             # direction of receiver
             pos_receiver_center = self.pos
-            ax.quiver(*pos_receiver_center, *receiver_tm[:,0]*arrow_len, label='x_direct', **x_arrow_plot_settings)
-            ax.quiver(*pos_receiver_center, *receiver_tm[:,1]*arrow_len, label='y_direct', **y_arrow_plot_settings)
-            ax.quiver(*pos_receiver_center, *receiver_tm[:,2]*arrow_len, label='z_direct', **z_arrow_plot_settings)
- 
+            ax.quiver(*pos_receiver_center, *receiver_tm[:, 0]*arrow_len,
+                      label='x_direct', **x_arrow_plot_settings)
+            ax.quiver(*pos_receiver_center, *receiver_tm[:, 1]*arrow_len,
+                      label='y_direct', **y_arrow_plot_settings)
+            ax.quiver(*pos_receiver_center, *receiver_tm[:, 2]*arrow_len,
+                      label='z_direct', **z_arrow_plot_settings)
+
         for mic_i, mic in enumerate(self.mic_all):
             if mic_i == 0:
                 label = 'Mic'
             else:
                 label = None
-            ax.plot([mic.pos_room[0]], [mic.pos_room[1]], [mic.pos_room[2]], 'ko', markersize=3, 
-                     alpha=0.5, label=label)
+            ax.plot([mic.pos_room[0]], [mic.pos_room[1]], [mic.pos_room[2]],
+                    'ko', markersize=3, alpha=0.5, label=label)
             mic_tm = rotate2tm(mic.rotate)
             mic_tm_comined = np.matmul(receiver_tm, mic_tm)
-            ax.quiver(*mic.pos_room, *mic_tm_comined[:, 0]*arrow_len, **x_arrow_plot_settings)
-            ax.quiver(*mic.pos_room, *mic_tm_comined[:, 1]*arrow_len, **y_arrow_plot_settings)
-            ax.quiver(*mic.pos_room, *mic_tm_comined[:, 2]*arrow_len, **z_arrow_plot_settings)
-   
+            ax.quiver(*mic.pos_room, *mic_tm_comined[:, 0]*arrow_len,
+                      **x_arrow_plot_settings)
+            ax.quiver(*mic.pos_room, *mic_tm_comined[:, 1]*arrow_len,
+                      **y_arrow_plot_settings)
+            ax.quiver(*mic.pos_room, *mic_tm_comined[:, 2]*arrow_len,
+                      **z_arrow_plot_settings)
+
     plt.show()
 
 
@@ -150,11 +161,14 @@ if __name__ == '__main__':
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    receiver.show(ax)
+    receiver.visualize(ax)
     ax.legend()
-    ax.set_xlim([-6, 6]); ax.set_xlabel('x')
-    ax.set_ylim([-6, 6]); ax.set_ylabel('y')
-    ax.set_zlim([-6, 6]); ax.set_zlabel('z')
+    ax.set_xlim([-6, 6])
+    ax.set_xlabel('x')
+    ax.set_ylim([-6, 6])
+    ax.set_ylabel('y')
+    ax.set_zlim([-6, 6])
+    ax.set_zlabel('z')
 
     os.makedirs('img/Receiver', exist_ok=True)
     fig.savefig('img/Receiver/demo.png')

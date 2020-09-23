@@ -100,7 +100,10 @@ class RoomSimulator(object):
         # basic configuration
         config = config['Room']
         self.Fs = np.int32(config['Fs'])
-        self.HP_cutoff = np.float(config['HP_cutoff'])
+        if 'HP_cutoff' in config.keys():
+            self.HP_cutoff = np.float(config['HP_cutoff'])
+        else:
+            self.HP_cutoff = None
         self.reflect_order = np.int32(config['reflect_order'])
         # threshold of reflection
         if 'amp_theta' in config.keys():
@@ -126,13 +129,13 @@ class RoomSimulator(object):
             config['Receiver']['Fs'] = f'{self.Fs}'
             self.receiver = Receiver(config)
 
-    def show(self, ax=None, is_zoom=False):
+    def visualize(self, ax=None, is_zoom=False):
         """"""
 
-        fig, ax = self.room.show(ax)
+        fig, ax = self.room.visualize(ax)
 
         ax.scatter(*self.source.pos, 'ro', label='source')
-        self.receiver.show(ax, arrow_len=0.5)
+        self.receiver.visualize(ax, arrow_len=0.5)
         ax.set_xlabel('x')
         ax.set_ylabel('y')
 
@@ -152,16 +155,18 @@ class RoomSimulator(object):
         # (nominal -4dB cut-off at 20 Hz)
         # cutoff frequency
         if self.HP_cutoff is None:
-            return None
-        w = 2*np.pi*self.HP_cutoff
-        r1, r2 = np.exp(-w*self.T_Fs), np.exp(-w*self.T_Fs)
-        b1, b2 = -(1+r2), r2  # Numerator coefficients (fix zeros)
-        a1, a2 = 2*r1*np.cos(w*self.T_Fs), -r1**2  # Denominator coefficients
-        HP_gain = (1-b1+b2)/(1+a1-a2)  # Normalisation gain
-        b = np.asarray([1, b1, b2])/HP_gain
-        a = np.asarray([1, -a1, -a2])
-        self._HP_filter_coef = [b, a]
-        return b, a
+            self._HP_filter_coef = None
+        else:
+            w = 2*np.pi*self.HP_cutoff
+            r1, r2 = np.exp(-w*self.T_Fs), np.exp(-w*self.T_Fs)
+            # Numerator coefficients (fix zeros)
+            b1, b2 = -(1+r2), r2
+            # Denominator coefficients
+            a1, a2 = 2*r1*np.cos(w*self.T_Fs), -r1**2
+            HP_gain = (1-b1+b2)/(1+a1-a2)  # Normalisation gain
+            b = np.asarray([1, b1, b2])/HP_gain
+            a = np.asarray([1, -a1, -a2])
+            self._HP_filter_coef = [b, a]
 
     def _plot_HP_spec(self, fig_path='HP_filter.png'):
         if self._HP_filter_coef is None:
@@ -301,7 +306,7 @@ class RoomSimulator(object):
         self.refl_gain_all = refl_gain_all[valid_img_index]
 
         if is_plot:
-            fig, ax = self.room.show(extra_point=self.img_pos_all)
+            fig, ax = self.room.visualize(extra_point=self.img_pos_all)
             plt.title(f'n_img: {self.n_img}')
             return fig, ax
 
@@ -373,7 +378,7 @@ class RoomSimulator(object):
         self.n_img = n_img
 
         if is_plot:
-            fig, ax = self.room.show(extra_point=self.img_pos_all)
+            fig, ax = self.room.visualize(extra_point=self.img_pos_all)
             plt.title(f'n_img: {self.n_img}')
             return fig, ax
 
@@ -480,6 +485,10 @@ class RoomSimulator(object):
                 ir_len_tmp = ir_tmp.shape[0]
                 ir[start_index_ir: start_index_ir+ir_len_tmp] = (
                     ir[start_index_ir: start_index_ir+ir_len_tmp] + ir_tmp)
+        # High-pass filtering
+        # when interpolating the spectrum of absorption, DC value is assigned
+        # to the value of 125Hz
+        ir = self.HP_filter(ir)
         return ir
 
     def _cal_ir_1mic(self, mic, is_verbose=False, img_dir=None):

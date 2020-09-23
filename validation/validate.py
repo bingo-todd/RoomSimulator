@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 def main():
     rir_matlab = sio.loadmat('H_ROOM_MIT_S1.mat', squeeze_me=True)['data']
 
-    rir_python = np.load('rir.npy')
+    rir_python = np.load('rir_new.npy')
 
     fig, ax = plt.subplots(1, 2, sharex=True, sharey=True, 
             tight_layout=True, figsize=(8, 3))

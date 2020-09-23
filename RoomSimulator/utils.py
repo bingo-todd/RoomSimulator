@@ -32,7 +32,13 @@ def cartesian2pole(pos):
     return [azi, ele, dist]
 
 
-def filter(b, a, x):
+def nonedelay_filter(b, a, x):
+    if len(b.shape) == 0:
+        b = b.reshape(1)
+    return scipy.signal.filtfilt(b, a, x)
+
+
+def norm_filter(b, a, x):
     if len(b.shape) == 0:
         b = b.reshape(1)
     return scipy.signal.lfilter(b, a, x)

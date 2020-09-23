@@ -36,6 +36,7 @@ RoomSimulator/SENSOR/Types/supercardoid.npy
 RoomSimulator/SENSOR/Types/unidirectional.mat
 RoomSimulator/SENSOR/Types/unidirectional.npy
 examples/delay_filter_test.py
+examples/roomsim_parallel.py
 examples/roomsim_test.py
 images/__init__.py
 validation/validate.py

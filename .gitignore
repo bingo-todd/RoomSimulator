@@ -8,3 +8,5 @@ rir.npy
 *.mat
 B_power_table.npy
 dist/
+MANIFEST
+*.swp

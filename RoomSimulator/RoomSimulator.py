@@ -6,12 +6,11 @@ import matplotlib
 import os
 
 from LocTools.easy_parallel import easy_parallel
-from .DelayFilter import DelayFilter
 from .Room import ShoeBox
 from .Source import Source
 from .Receiver import Receiver
 from .utils import cal_dist, cartesian2pole
-from .utils import norm_filter, nonedelay_filter
+from .utils import norm_filter, nonedelay_filter, delay_filter
 
 
 class RoomSimulator(object):
@@ -174,19 +173,24 @@ class RoomSimulator(object):
         freqs, spec = scipy.signal.freqz(*self._HP_filter_coef,
                                          fs=self.Fs,
                                          worN=2048)
-        fig, ax = plt.subplots(1, 2)
+        fig, ax = plt.subplots(1, 3, figsize=[10, 4])
+        x = np.zeros(1024)
+        x[10] = 1
+        ir = norm_filter(*self._HP_filter_coef, x)
+        ax[0].plot(ir)
+        ax[0].set_title('ir')
+
         amp_spec = 10*np.log10(np.abs(spec)+1e-20)
-        ax[0].plot(freqs, amp_spec)
+        ax[1].plot(freqs, amp_spec)
         index_tmp = np.argmin(np.abs(np.max(amp_spec)-3-amp_spec))
-        ax[0].text(freqs[index_tmp], amp_spec[index_tmp],
+        ax[1].text(freqs[index_tmp], amp_spec[index_tmp],
                    f'{freqs[index_tmp]} {amp_spec[index_tmp]}')
-        ax[0].set_title('amp')
-        ax[1].plot(freqs, np.angle(spec)/np.pi)
-        ax[1].set_title('angle')
-        ax[1].yaxis.set_major_formatter(
+        ax[1].set_title('amp')
+
+        ax[2].plot(freqs, np.angle(spec)/np.pi)
+        ax[2].set_title('angle')
+        ax[2].yaxis.set_major_formatter(
             matplotlib.ticker.FormatStrFormatter('%g $\pi$'))  # noqa: W605
-        # ax[1].yaxis.set_major_locator(
-        #   matplotlib.ticker.MultipleLocator(base=1.0))
         fig.savefig(fig_path)
 
     def HP_filter(self, x):
@@ -241,6 +245,16 @@ class RoomSimulator(object):
                                          self.room.B[wall_i, freq_i],
                                          n_refl[wall_i]))
         return attenuate
+
+    def plot_all_img(self, ax=None):
+        if ax is None:
+            fig, ax = self.room.visualize(extra_point=self.img_pos_all)
+        else:
+            fig = None
+
+        fig, ax = self.room.visualize(extra_point=self.img_pos_all)
+        plt.title(f'n_img: {self.n_img}')
+        return fig, ax
 
     def cal_all_img(self, is_plot=False, is_verbose=False):
         """ calculate all possible sound images based on matrix manipulation
@@ -396,42 +410,41 @@ class RoomSimulator(object):
              ir[:self.n_fft_half_valid+1]))
         return ir
 
-    def _cal_ir_refls(self, img_pos_batch, refl_amp_batch, mic):
-        n_img = len(img_pos_batch)
-        results = []
-        for img_i in np.arange(n_img):
-            if (mic.direct_type == 'binaural_L'
-                    or mic.direct_type == 'binaural_R'):
-                pos_img_to_mic = np.matmul(self.receiver.tm,
-                                           (self.img_pos_all[img_i]
-                                            - self.receiver.pos))
-            else:
-                pos_img_to_mic = np.matmul(mic.tm_room,
-                                           (self.img_pos_all[img_i]
-                                            - mic.pos_room))
-            *angle_img_to_mic, dist = cartesian2pole(pos_img_to_mic)
+    def _cal_ir_1refl(self, img_pos, refl_gain, mic):
+        if np.max(np.abs(img_pos-self.source.pos)) < 1e-10:
+            is_direct = True
+        else:
+            is_direct = False
 
-            # parse delay into integer and fraction.
-            delay_sample_num = dist * self.Fs_c
-            delay_sample_num_int = np.int(np.round(delay_sample_num))
-            delay_sample_num_frac = (delay_sample_num - delay_sample_num_int)
+        if (mic.direct_type == 'binaural_L'
+                or mic.direct_type == 'binaural_R'):
+            pos_img_to_mic = np.matmul(self.receiver.tm,
+                                       img_pos - self.receiver.pos)
+        else:
+            pos_img_to_mic = np.matmul(mic.tm_room,
+                                       img_pos - mic.pos_room)
+        *angle_img_to_mic, dist = cartesian2pole(pos_img_to_mic)
 
-            start_index_ir_tmp = max(
-                [self.n_fft_half_valid-delay_sample_num_int, 0])
-            # if delay_sample_num_int is larger than n_fft_half_valid
-            # apply the remain delay while add ir_tmp to ir_all
-            start_index_ir = max(
-                [delay_sample_num_int-self.n_fft_half_valid, 0])
-            if start_index_ir > self.ir_len:
-                continue
+        # parse delay into integer and fraction.
+        delay_sample_num = dist * self.Fs_c
+        delay_sample_num_int = np.int(np.round(delay_sample_num))
+        delay_sample_num_frac = (delay_sample_num-delay_sample_num_int)
+
+        start_index_ir_tmp = max(
+            [self.n_fft_half_valid-delay_sample_num_int, 0])
+        # if delay_sample_num_int is larger than n_fft_half_valid
+        # apply the remain delay while add ir_tmp to ir_all
+        start_index_ir = max(
+            [delay_sample_num_int-self.n_fft_half_valid, 0])
+
+        if start_index_ir < self.ir_len:
             #
-            pos_mic_to_img = np.matmul(self.source.tm.T,
-                                       (mic.pos_room
-                                        - self.img_pos_all[img_i]))
+            pos_mic_to_img = np.matmul(self.source.tm,
+                                       mic.pos_room - img_pos)
             *angle_mic_to_img, _ = cartesian2pole(pos_mic_to_img)
 
             # amplitude gain of wall
-            refl_amp = self.refl_gain_all[img_i]
+            refl_amp = refl_gain
             # amplitude gain of distance
             refl_amp = refl_amp/dist
             # amplitude gain of air
@@ -445,8 +458,9 @@ class RoomSimulator(object):
             ir_tmp = norm_filter(ir_source, 1, ir_tmp)
 
             max_amp = np.max(np.abs(ir_tmp[:self.n_fft_half_valid]))
-            if max_amp > self.amp_theta:
-                    # mic directivity filter
+            if is_direct or max_amp > self.amp_theta:
+                # direct sound and reflections with amplitude exceed threshold
+                # mic directivity filter
                 ir_mic = mic.get_ir(angle_img_to_mic)
                 if ir_mic is not None:
                     ir_tmp = norm_filter(
@@ -454,159 +468,65 @@ class RoomSimulator(object):
                         np.concatenate((ir_tmp, self.zero_padd_array)))
 
                     # apply fraction delay to ir_tmp
-                    delay_filter_obj = DelayFilter(
-                        self.Fs, delay_sample_num_frac/self.Fs)
-                    ir_tmp = delay_filter_obj.filter(ir_tmp, is_padd=True)
+                    ir_tmp = delay_filter(ir_tmp, delay_sample_num_frac)
 
                     # apply integer delay
                     ir_tmp = ir_tmp[start_index_ir_tmp:]
                     ir_len_tmp = min(
                         [self.ir_len-start_index_ir, ir_tmp.shape[0]])
-                    results.append([start_index_ir, ir_tmp[:ir_len_tmp]])
+                    return start_index_ir, ir_tmp[:ir_len_tmp]
+        return None
+
+    def _cal_ir_refls(self, img_pos_batch, refl_amp_batch, mic):
+        n_img = len(img_pos_batch)
+        results = []
+        for img_i in np.arange(n_img):
+            result = self._cal_ir_1refl(img_pos_batch[img_i],
+                                        refl_amp_batch[img_i],
+                                        mic)
+            results.append(result)
         return results
 
     def _cal_ir_1mic_parallel(self, mic, n_worker):
-        n_batch = n_worker
-        n_img_per_batch = int(self.n_img/n_batch)
-        tasks = []
-        for batch_i in range(n_batch):
-            i_start = batch_i*n_img_per_batch
-            i_end = i_start+n_img_per_batch
-            tasks.append(
-                [self.img_pos_all[i_start:i_end],
-                 self.refl_gain_all[i_start:i_end],
-                 mic])
-        results_batch_all = easy_parallel(self._cal_ir_refls,
-                                          tasks,
-                                          n_worker=n_worker)
-        ir = np.zeros(self.ir_len)
-        for results_batch in results_batch_all:
-            for start_index_ir, ir_tmp in results_batch:
-                ir_len_tmp = ir_tmp.shape[0]
-                ir[start_index_ir: start_index_ir+ir_len_tmp] = (
-                    ir[start_index_ir: start_index_ir+ir_len_tmp] + ir_tmp)
-        # High-pass filtering
-        # when interpolating the spectrum of absorption, DC value is assigned
-        # to the value of 125Hz
-        ir = self.HP_filter(ir)
+        if self.n_img < n_worker * 5:
+            # no need for parallelization
+            ir = self._cal_ir_1mic(mic)
+        else:
+            n_batch = n_worker
+            n_img_per_batch = int(self.n_img/n_batch)
+            tasks = []
+            for batch_i in range(n_batch):
+                i_start = batch_i*n_img_per_batch
+                i_end = i_start+n_img_per_batch
+                tasks.append(
+                    [self.img_pos_all[i_start:i_end],
+                     self.refl_gain_all[i_start:i_end],
+                     mic])
+            results_batch_all = easy_parallel(self._cal_ir_refls,
+                                              tasks,
+                                              n_worker=n_worker)
+            ir = np.zeros(self.ir_len)
+            for results_batch in results_batch_all:
+                for result in results_batch:
+                    if result is None:
+                        continue
+                    start_index_ir, ir_tmp = result
+                    ir_len_tmp = ir_tmp.shape[0]
+                    ir[start_index_ir: start_index_ir+ir_len_tmp] = (
+                        ir[start_index_ir: start_index_ir+ir_len_tmp] + ir_tmp)
+            # High-pass filtering
+            # when interpolating the spectrum of absorption, DC value is
+            # assigned to the value of 125Hz
+            ir = self.HP_filter(ir)
         return ir
 
     def _cal_ir_1mic(self, mic, is_verbose=False, img_dir=None):
         ir = np.zeros(self.ir_len)
-        if is_verbose:
-            refl_count = 0
-            fig, ax = plt.subplots(1, 3, tight_layout=True, figsize=[15, 6])
-            ax[0].scatter(self.source.pos[0], self.source.pos[1], c='r',
-                          marker='x', label='source')
-            ax[0].scatter(self.receiver.pos[0], self.receiver.pos[1], c='r',
-                          marker='o', label='mic')
-            valid_img_point_label = 'valid_img'
-            invalid_img_point_label = 'invalid_img'
-        for img_i in np.arange(self.n_img):
-
-            if (mic.direct_type == 'binaural_L'
-                    or mic.direct_type == 'binaural_R'):
-                pos_img_to_mic = np.matmul(self.receiver.tm,
-                                           (self.img_pos_all[img_i]
-                                            - self.receiver.pos))
-            else:
-                pos_img_to_mic = np.matmul(mic.tm_room,
-                                           (self.img_pos_all[img_i]
-                                            - mic.pos_room))
-            *angle_img_to_mic, dist = cartesian2pole(pos_img_to_mic)
-
-            #
-            pos_mic_to_img = np.matmul(self.source.tm.T,
-                                       (mic.pos_room
-                                        - self.img_pos_all[img_i]))
-            *angle_mic_to_img, _ = cartesian2pole(pos_mic_to_img)
-
-            # amplitude gain of wall
-            refl_amp = self.refl_gain_all[img_i]
-            # amplitude gain of distance
-            refl_amp = refl_amp/dist
-            # amplitude gain of air
-            refl_amp = refl_amp*(self.air_attenuate_per_dist**dist)
-
-            # calculate ir based on amp
-            ir_tmp = self.amp_spec_to_ir(refl_amp)
-
-            # directivity of sound source, directivity after imaged
-            ir_source = self.source.get_ir(angle_mic_to_img)
-            ir_tmp = norm_filter(ir_source, 1, ir_tmp)
-
-            max_amp = np.max(np.abs(ir_tmp[:self.n_fft_half_valid]))
-            if max_amp > self.amp_theta:
-                    # mic directivity filter
-                ir_mic = mic.get_ir(angle_img_to_mic)
-                if ir_mic is not None:
-                    ir_tmp = norm_filter(
-                        ir_mic, 1,
-                        np.concatenate((ir_tmp, self.zero_padd_array)))
-
-                    # parse delay into integer and fraction.
-                    delay_sample_num = dist * self.Fs_c
-                    delay_sample_num_int = np.int(np.round(delay_sample_num))
-                    delay_sample_num_frac = (delay_sample_num
-                                             - delay_sample_num_int)
-
-                    # apply fraction delay to ir_tmp
-                    delay_filter_obj = DelayFilter(
-                        self.Fs, delay_sample_num_frac/self.Fs)
-                    ir_tmp = delay_filter_obj.filter(ir_tmp, is_padd=True)
-
-                    # apply integer delay
-                    # first shift ir_tmp which has delay capacity of
-                    # n_fft_half_valid
-                    start_index_ir_tmp = max(
-                        [self.n_fft_half_valid-delay_sample_num_int, 0])
-                    ir_tmp = ir_tmp[start_index_ir_tmp:]
-
-                    # if delay_sample_num_int is larger than n_fft_half_valid
-                    # apply the remain delay while add ir_tmp to ir_all
-                    start_index_ir = max(
-                        [delay_sample_num_int-self.n_fft_half_valid, 0])
-                    if start_index_ir < self.ir_len:
-                        ir_len_tmp = min(
-                            [self.ir_len-start_index_ir, ir_tmp.shape[0]])
-                        ir[start_index_ir: start_index_ir+ir_len_tmp] = \
-                            (ir[start_index_ir: start_index_ir+ir_len_tmp]
-                             + ir_tmp[:ir_len_tmp])
-                        refl_valid_flag = True
-
-            if is_verbose:
-                if self.img_pos_all[img_i, 2] == self.source.pos[2]:
-                    if np.max(np.abs(self.img_pos_all[img_i]
-                                     - self.source.pos)) < 1e-10:
-                        continue
-
-                    if refl_valid_flag:
-                        ax[0].scatter(self.img_pos_all[img_i, 0],
-                                      self.img_pos_all[img_i, 1],
-                                      c='b',
-                                      marker='x',
-                                      label=valid_img_point_label)
-                        valid_img_point_label = None
-                    else:
-                        ax[0].scatter(self.img_pos_all[img_i, 0],
-                                      self.img_pos_all[img_i, 1],
-                                      c='b',
-                                      marker='x',
-                                      alpha=0.3,
-                                      label=invalid_img_point_label)
-                        invalid_img_point_label = None
-                    ax[0].legend(loc='upper right')
-                    ax[0].set_title('sound image')
-                    ax[1].cla()
-                    ax[1].plot(ir_tmp)
-                    ax[1].set_xlim([0, 3000])
-                    ax[1].set_title('ir_tmp')
-                    ax[2].cla()
-                    ax[2].plot(ir)
-                    ax[2].set_xlim([0, 3000])
-                    ax[2].set_title('rir_all')
-                    fig.savefig(f'{img_dir}/{refl_count}.png')
-                    refl_count = refl_count + 1
+        results = self._cal_ir_refls(self.img_pos_all, self.refl_gain_all, mic)
+        for img_i, [start_index, ir_tmp] in enumerate(results):
+            ir_len_tmp = ir_tmp.shape[0]
+            ir[start_index: start_index+ir_len_tmp] = (
+                ir[start_index: start_index+ir_len_tmp] + ir_tmp)
 
         # High-pass filtering
         # when interpolating the spectrum of absorption, DC value is assigned
@@ -619,7 +539,15 @@ class RoomSimulator(object):
         """
         calculate rir with image sources already calculated
         """
-        if parallel_type == 1:  # a process per mic
+        if parallel_type == 0:
+            # no parallel
+            ir_all = []
+            for mic_i, mic in enumerate(self.receiver.mic_all):
+                if is_verbose:
+                    os.makedirs(f'{image_dir}/{mic_i}', exist_ok=True)
+                ir_all.append(
+                    self._cal_ir_1mic(mic, is_verbose, f'{image_dir}/{mic_i}'))
+        elif parallel_type == 1:  # a process per mic
             tasks = []
             for mic_i, mic in enumerate(self.receiver.mic_all):
                 if is_verbose:
@@ -633,14 +561,14 @@ class RoomSimulator(object):
             for mic in self.receiver.mic_all:
                 ir_all.append(
                     self._cal_ir_1mic_parallel(mic, n_worker))
-        else:
-            # no parallel
-            ir_all = []
-            for mic in self.receiver.mic_all:
+        elif parallel_type == 3:
+            tasks = []
+            for mic_i, mic in enumerate(self.receiver.mic_all):
                 if is_verbose:
                     os.makedirs(f'{image_dir}/{mic_i}', exist_ok=True)
-                ir_all.append(
-                    self._cal_ir_1mic(mic, is_verbose, f'{image_dir}/{mic_i}'))
+                tasks.append([mic, n_worker])
+            ir_all = easy_parallel(self._cal_ir_1mic_parallel, tasks,
+                                   n_worker=self.receiver.n_mic)
 
         ir_all = np.concatenate(
             [ir.reshape([-1, 1]) for ir in ir_all],

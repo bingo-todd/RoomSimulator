@@ -28,7 +28,7 @@ room_config['Room'] = {
     'size': '4, 4, 4',
     'RT60': ', '.join([f'{item}' for item in np.ones(6) * 0.2]),
     'A': '',
-    'Fs': 44100,
+    'Fs': 44100,  # other value, the hrir will be resampled 
     'reflect_order': -1,
     'HP_cutoff': 100}
 
@@ -60,7 +60,7 @@ source_config['Source'] = {
     'view': '0, 0, 0',
     'directivity':'omnidirectional'}
 roomsim.load_source_config(source_config)
-fig, ax = roomsim.show()
+fig, ax = roomsim.visualize()
 ax.view_init(elev=60, azim=30)
 fig.savefig(f'img/room.png', dpi=200)
 plt.close(fig)
@@ -87,14 +87,9 @@ visualizing the calculating procedure of RIR
 
 ## Validation 
 
-Comparison with RoomSim under the same settings of room, microphones and sound source.
+Comparison with RoomSim under the same settings
 
-Difference:
-
-1. The restriction on how many image sources are considered, which is relaxed in RoomSimulator
-2. Delay filter(allowing fraction delays) is adopted in RoomSimulator but not in RoomSim 
-
-![](images/validation.png)
+<img src='images/validation_without_delayfilter.png'>
 
 
 
@@ -120,12 +115,26 @@ Difference:
 
   
 
+- High-pass filter
 
+  <img src='images/rir_HP_effect.png'>
 
 - Delay filter
 
-  ![](images/delay_filter.png)
+  v1: delaying input using fir filter
+
+  v2: delaying input by modifying the phase spectrum
+
+  ![](images/delay_filter_098.png)
+
+  RIR anesthetization with delay filter(v1) [roomsim: matlab toolbox]
+
+  <img src='images/validation_with_delayfilter.png'>
+
+  RIR anesthetization without delay filter(v1) 
+
+  <img src='images/validation_without_delayfilter.png'>
 
 - Terminologies of rotation
 
-  <img src="images/rotation_angle_definition.png" style="zoom: 25%;" /> 
+  <img src="images/rotation_angle_definition.png"> 

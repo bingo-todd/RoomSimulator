@@ -10,8 +10,8 @@ room_config['Room'] = {
     'size': '4, 4, 4',
     'RT60': ', '.join([f'{item}' for item in np.ones(6) * 0.2]),
     'A': '',
-    'Fs': 8000,
-    'reflect_order': 10}
+    'Fs': 16000,
+    'reflect_order': -1}
 
 receiver_config = configparser.ConfigParser()
 receiver_config['Receiver'] = {
@@ -55,7 +55,7 @@ def main():
     roomsim.cal_all_img()
     rir_HP = roomsim.cal_ir_mic()
 
-    fig, ax = plt.subplots(1, 2, tight_layout=True)
+    fig, ax = plt.subplots(1, 2, tight_layout=True, figsize=[10, 4])
     ax[0].plot(rir_no_HP[:, 0])
     ax[0].plot(rir_HP[:, 0])
     ax[0].set_title('ir')

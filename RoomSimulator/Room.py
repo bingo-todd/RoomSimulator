@@ -29,7 +29,7 @@ class ShoeBox(object):
             self.RT60 = Absorb2RT(self.A, room_size=self.size)
         self.B = np.sqrt(1 - self.A)  # reflection coefficients
 
-    def visualized(self, ax=None, extra_point=None, show_absorption=False):
+    def visualize(self, ax=None, extra_point=None, show_absorption=False):
         if not show_absorption:
             fig, ax = plot_cube(self.size, ax, extra_point)
         else:
@@ -55,4 +55,4 @@ if __name__ == "__main__":
                       'RT60': ' '.join([f'{item}' for item in np.ones(6)*0.5]),
                       'A': ''}
     room = ShoeBox(config['Room'])
-    room.show(fig_path='img/ShoeBox_test.png', show_absorption=True)
+    room.visualize(fig_path='../images/ShoeBox_test.png', show_absorption=True)

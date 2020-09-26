@@ -1,4 +1,5 @@
 import time
+import os
 import numpy as np
 import scipy.signal
 
@@ -75,17 +76,24 @@ def delay_filter(x, n_sample, order=128, is_padd=False, padd_len=None,
         x = np.pad(x[:-n_sample_int], [n_sample_int, 0])
     n_sample = n_sample - n_sample_int
 
+    pid = os.getpid()
     if np.abs(n_sample) > 1e-10:
-        sample_index_all = np.arange(order) - n_sample
-        ir = (((f_high*order*np.sinc(f_high*sample_index_all)
-                * np.cos(np.pi/order*sample_index_all))
-               + np.cos(f_high*np.pi*sample_index_all))
-              * f_high*order/(order*order)/f_high)
+        ir_file_path = f'dump/delay_filter_{pid}/{n_sample:.5f}.npy'
+        os.makedirs(f'dump/delay_filter_{pid}', exist_ok=True)
+        if os.path.exists(ir_file_path):
+            ir = np.load(ir_file_path, allow_pickle=True)
+        else:
+            sample_index_all = np.arange(order) - n_sample
+            ir = (((f_high*order*np.sinc(f_high*sample_index_all)
+                    * np.cos(np.pi/order*sample_index_all))
+                   + np.cos(f_high*np.pi*sample_index_all))
+                  * f_high*order/(order*order)/f_high)
+            np.save(ir_file_path, ir)
 
         if is_padd:
             if padd_len is None:
                 padd_len = order
-            x = np.concatenate([x, np.zeros(padd_len)])
+            x = np.pad(x, [0, padd_len])
         x = scipy.signal.lfilter(ir, 1, x)
     return x
 

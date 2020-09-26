@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import os
 
-from LocTools.easy_parallel import easy_parallel
+from BasicTools.easy_parallel import easy_parallel
 from .Room import ShoeBox
 from .Source import Source
 from .Receiver import Receiver
@@ -87,13 +87,13 @@ class RoomSimulator(object):
              [+1, +1, +1],
              [+0, +1, +1]])
 
+        os.makedirs('dump/delay_filter', exist_ok=True)
+
         # init
         self.amp_gain_reflect_all = np.zeros((0, self.F_abs.shape[0]))
         self.img_pos_all = np.zeros((0, 3))
         self.refl_gain_all = np.zeros((0, self.F_abs.shape[0]))
         self.n_img = 0
-
-        self.B_power_table = {}
 
     def _load_room_config(self, config):
         # basic configuration
@@ -488,42 +488,46 @@ class RoomSimulator(object):
         return results
 
     def _cal_ir_1mic_parallel(self, mic, n_worker):
-        if self.n_img < n_worker * 5:
-            # no need for parallelization
-            ir = self._cal_ir_1mic(mic)
-        else:
-            n_batch = n_worker
-            n_img_per_batch = int(self.n_img/n_batch)
-            tasks = []
-            for batch_i in range(n_batch):
-                i_start = batch_i*n_img_per_batch
-                i_end = i_start+n_img_per_batch
-                tasks.append(
-                    [self.img_pos_all[i_start:i_end],
-                     self.refl_gain_all[i_start:i_end],
-                     mic])
-            results_batch_all = easy_parallel(self._cal_ir_refls,
-                                              tasks,
-                                              n_worker=n_worker)
-            ir = np.zeros(self.ir_len)
-            for results_batch in results_batch_all:
-                for result in results_batch:
-                    if result is None:
-                        continue
-                    start_index_ir, ir_tmp = result
-                    ir_len_tmp = ir_tmp.shape[0]
-                    ir[start_index_ir: start_index_ir+ir_len_tmp] = (
-                        ir[start_index_ir: start_index_ir+ir_len_tmp] + ir_tmp)
-            # High-pass filtering
-            # when interpolating the spectrum of absorption, DC value is
-            # assigned to the value of 125Hz
-            ir = self.HP_filter(ir)
+        if self.n_img < n_worker:
+            n_worker = self.n_img
+
+        n_batch = n_worker
+        n_img_per_batch = int(self.n_img/n_batch)
+        tasks = []
+        for batch_i in range(n_batch):
+            i_start = batch_i*n_img_per_batch
+            i_end = i_start+n_img_per_batch
+            tasks.append(
+                [self.img_pos_all[i_start:i_end],
+                    self.refl_gain_all[i_start:i_end],
+                    mic])
+        results_batch_all = easy_parallel(self._cal_ir_refls,
+                                          tasks,
+                                          n_worker=n_worker)
+        if results_batch_all is None:
+            raise Exception('NULL rir')
+        ir = np.zeros(self.ir_len)
+        for results_batch in results_batch_all:
+            for result in results_batch:
+                if result is None:
+                    continue
+                start_index_ir, ir_tmp = result
+                ir_len_tmp = ir_tmp.shape[0]
+                ir[start_index_ir: start_index_ir+ir_len_tmp] = (
+                    ir[start_index_ir: start_index_ir+ir_len_tmp] + ir_tmp)
+        # High-pass filtering
+        # when interpolating the spectrum of absorption, DC value is
+        # assigned to the value of 125Hz
+        ir = self.HP_filter(ir)
         return ir
 
     def _cal_ir_1mic(self, mic, is_verbose=False, img_dir=None):
         ir = np.zeros(self.ir_len)
         results = self._cal_ir_refls(self.img_pos_all, self.refl_gain_all, mic)
-        for img_i, [start_index, ir_tmp] in enumerate(results):
+        for img_i, result in enumerate(results):
+            if result is None:
+                continue
+            start_index, ir_tmp = result
             ir_len_tmp = ir_tmp.shape[0]
             ir[start_index: start_index+ir_len_tmp] = (
                 ir[start_index: start_index+ir_len_tmp] + ir_tmp)
@@ -573,6 +577,8 @@ class RoomSimulator(object):
         ir_all = np.concatenate(
             [ir.reshape([-1, 1]) for ir in ir_all],
             axis=1)
+
+        np.save('dump/B_power_table.npy', self.B_power_table)
         return ir_all
 
     def cal_ir_reciver(self):

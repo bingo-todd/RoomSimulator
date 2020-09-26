@@ -10,3 +10,4 @@ B_power_table.npy
 dist/
 MANIFEST
 *.swp
+examples/dump

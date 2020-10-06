@@ -6,11 +6,13 @@ import matplotlib
 import os
 
 from BasicTools.easy_parallel import easy_parallel
+from BasicTools.get_file_path import get_file_path
+from BasicTools.reverb.cal_DRR import cal_DRR
 from .Room import ShoeBox
 from .Source import Source
 from .Receiver import Receiver
 from .utils import cal_dist, cartesian2pole
-from .utils import norm_filter, nonedelay_filter, delay_filter
+from .utils import norm_filter, nonedelay_filter
 
 
 class RoomSimulator(object):
@@ -87,13 +89,27 @@ class RoomSimulator(object):
              [+1, +1, +1],
              [+0, +1, +1]])
 
-        os.makedirs('dump/delay_filter', exist_ok=True)
+        delay_ir_dir = f'dump/RoomSimulator/delay_filter/{os.getpid()}'
+        os.makedirs(delay_ir_dir, exist_ok=True)
+        if not os.path.exists(delay_ir_dir):
+            ir_path_all = get_file_path('dump/delay_filter',
+                                        suffix='.npy',
+                                        is_absolute=True)
+            if len(ir_path_all) > 0:
+                os.system(f"cp {' '.join(ir_path_all)} {delay_ir_dir}")
+        os.makedirs(delay_ir_dir, exist_ok=True)
+        self.delay_ir_dir = delay_ir_dir
+
+        self.B_power_table = {}
 
         # init
         self.amp_gain_reflect_all = np.zeros((0, self.F_abs.shape[0]))
         self.img_pos_all = np.zeros((0, 3))
         self.refl_gain_all = np.zeros((0, self.F_abs.shape[0]))
         self.n_img = 0
+
+    def clean_dump(self):
+        os.system(f'rm -r {self.delay_ir_dir}')
 
     def _load_room_config(self, config):
         # basic configuration
@@ -198,6 +214,42 @@ class RoomSimulator(object):
             return x
         else:
             return nonedelay_filter(*self._HP_filter_coef, x)
+
+    def delay_filter(self, x, n_sample, is_padd=False,
+                     padd_len=None, f_high=None, id_padd=False):
+        """
+        fir delay filter
+        """
+        order = 128
+
+        if f_high is None:
+            f_high = 0.98
+
+        n_sample_int = np.int(np.round(n_sample))
+        if n_sample_int < 0:
+            x = np.pad(x[n_sample_int:], [0, n_sample_int])
+        elif n_sample_int > 0:
+            x = np.pad(x[:-n_sample_int], [n_sample_int, 0])
+        n_sample = n_sample - n_sample_int
+
+        if np.abs(n_sample) > 1e-10:
+            ir_path = f'{self.delay_ir_dir}/{n_sample:.5f}.npy'
+            try:
+                ir = np.load(ir_path, allow_pickle=True)
+            except Exception:
+                sample_index_all = np.arange(order) - n_sample
+                ir = (((f_high*order*np.sinc(f_high*sample_index_all)
+                        * np.cos(np.pi/order*sample_index_all))
+                       + np.cos(f_high*np.pi*sample_index_all))
+                      * f_high*order/(order*order)/f_high)
+                np.save(ir_path, ir)
+
+            if is_padd:
+                if padd_len is None:
+                    padd_len = order
+                x = np.pad(x, [0, padd_len])
+            x = scipy.signal.lfilter(ir, 1, x)
+        return x
 
     def local_power(self, x, n):
         # for efficience test
@@ -324,7 +376,7 @@ class RoomSimulator(object):
             plt.title(f'n_img: {self.n_img}')
             return fig, ax
 
-    def cal_all_img_direct(self, is_plot=False, is_verbose=False):
+    def cal_all_img_directly(self, is_plot=False, is_verbose=False):
         """ calculate all possible sound images using 4 layer of loop
         To speed up:
         1. calculate the position and reflection number through each wall of
@@ -411,6 +463,17 @@ class RoomSimulator(object):
         return ir
 
     def _cal_ir_1refl(self, img_pos, refl_gain, mic):
+        """calculate the impulse response of sound image
+        Args:
+            img_pos: the position of sound image
+            refl_gain: the amplitude gain of reflections
+            mic: microphone obj
+        Returns:
+            start_index_ir: the position of whole ir where this
+                            ir should be added
+            ir: impulse response of 1 sound image
+
+        """
         if np.max(np.abs(img_pos-self.source.pos)) < 1e-10:
             is_direct = True
         else:
@@ -468,7 +531,7 @@ class RoomSimulator(object):
                         np.concatenate((ir_tmp, self.zero_padd_array)))
 
                     # apply fraction delay to ir_tmp
-                    ir_tmp = delay_filter(ir_tmp, delay_sample_num_frac)
+                    ir_tmp = self.delay_filter(ir_tmp, delay_sample_num_frac)
 
                     # apply integer delay
                     ir_tmp = ir_tmp[start_index_ir_tmp:]
@@ -477,12 +540,12 @@ class RoomSimulator(object):
                     return start_index_ir, ir_tmp[:ir_len_tmp]
         return None
 
-    def _cal_ir_refls(self, img_pos_batch, refl_amp_batch, mic):
-        n_img = len(img_pos_batch)
+    def _cal_ir_refls(self, img_pos, refl_amp, mic):
+        n_img = len(img_pos)
         results = []
         for img_i in np.arange(n_img):
-            result = self._cal_ir_1refl(img_pos_batch[img_i],
-                                        refl_amp_batch[img_i],
+            result = self._cal_ir_1refl(img_pos[img_i],
+                                        refl_amp[img_i],
                                         mic)
             results.append(result)
         return results
@@ -493,13 +556,15 @@ class RoomSimulator(object):
 
         n_batch = n_worker
         n_img_per_batch = int(self.n_img/n_batch)
+        img_index_perm = np.random.permutation(self.n_img)
         tasks = []
         for batch_i in range(n_batch):
             i_start = batch_i*n_img_per_batch
             i_end = i_start+n_img_per_batch
+            img_index_batch = img_index_perm[i_start:i_end]
             tasks.append(
-                [self.img_pos_all[i_start:i_end],
-                    self.refl_gain_all[i_start:i_end],
+                [self.img_pos_all[img_index_batch],
+                    self.refl_gain_all[img_index_batch],
                     mic])
         results_batch_all = easy_parallel(self._cal_ir_refls,
                                           tasks,
@@ -532,6 +597,20 @@ class RoomSimulator(object):
             ir[start_index: start_index+ir_len_tmp] = (
                 ir[start_index: start_index+ir_len_tmp] + ir_tmp)
 
+        # High-pass filtering
+        # when interpolating the spectrum of absorption, DC value is assigned
+        # to the value of 125Hz
+        ir = self.HP_filter(ir)
+        return ir
+
+    def _cal_direct_ir_1mic(self, mic):
+        ir = np.zeros(self.ir_len)
+        start_index, ir_tmp = self._cal_ir_1refl(self.source.pos,
+                                                 np.ones(6),
+                                                 mic)
+        ir_len_tmp = ir_tmp.shape[0]
+        ir[start_index: start_index+ir_len_tmp] = (
+            ir[start_index: start_index+ir_len_tmp] + ir_tmp)
         # High-pass filtering
         # when interpolating the spectrum of absorption, DC value is assigned
         # to the value of 125Hz
@@ -581,9 +660,21 @@ class RoomSimulator(object):
         np.save('dump/B_power_table.npy', self.B_power_table)
         return ir_all
 
-    def cal_ir_reciver(self):
+    def cal_direct_ir_mic(self):
+        direct_ir_all = []
+        for mic in self.receiver.mic_all:
+            direct_ir = self._cal_direct_ir_1mic(mic)
+            direct_ir_all.append(direct_ir)
+        direct_ir_all = np.concatenate(
+            [ir.reshape([-1, 1]) for ir in direct_ir_all],
+            axis=1)
+        return direct_ir_all
+
+    def cal_DRR(self):
         ir = self._cal_ir_1mic(self.receiver)
-        return ir
+        direct_ir = self._cal_direct_ir_1mic(self.receiver)
+        drr = cal_DRR(ir, direct_ir)
+        return drr
 
     def save_img_info(self, data_path=None):
         if data_path is None:

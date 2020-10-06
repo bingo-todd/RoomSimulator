@@ -45,6 +45,7 @@ class Receiver(object):
         self._load_config(config)
 
         self.tm = rotate2tm(-self.rotate)
+        self.tm_room = self.tm
 
         self.direct_type = 'omnidirectional'  #
         self.directivity = Directivity(self.Fs)
@@ -58,8 +59,11 @@ class Receiver(object):
     def _load_config(self, config):
         config_receiver = config['Receiver']
         self.Fs = np.int(config_receiver['Fs'])
+
         self.pos = np.asarray(
             [np.float32(item) for item in config_receiver['pos'].split(',')])
+        self.pos_room = self.pos
+
         self.rotate = np.asarray(
             [np.float32(item)
              for item in config_receiver['rotate'].split(',')])
@@ -70,6 +74,14 @@ class Receiver(object):
         for mic_i in range(self.n_mic):
             config[f'Mic_{mic_i}']['Fs'] = f'{self.Fs}'
             self.mic_all.append(Mic(config[f'Mic_{mic_i}']))
+
+    def get_ir(self, angle):
+        """
+        angle: angle of sound source relative to mic, possible range
+            angle_azimuth: -180 to 180 in step of 1
+            angle_elevation: -90 to 90 in step of 1
+        """
+        return self.directivity.get_ir(angle)
 
     def visualize(self, ax=None, receiver_type='linear', arrow_len=1):
         x_arrow_plot_settings = {

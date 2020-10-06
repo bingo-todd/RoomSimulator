@@ -2,6 +2,7 @@ import time
 import os
 import numpy as np
 import scipy.signal
+from BasicTools.get_file_path import get_file_path
 
 
 rad_per_degree = np.pi/180
@@ -77,18 +78,25 @@ def delay_filter(x, n_sample, order=128, is_padd=False, padd_len=None,
     n_sample = n_sample - n_sample_int
 
     pid = os.getpid()
+    ir_dir = f'dump/delay_filter/{pid}'
     if np.abs(n_sample) > 1e-10:
-        ir_file_path = f'dump/delay_filter_{pid}/{n_sample:.5f}.npy'
+        ir_path = f'{ir_dir}/{n_sample:.5f}.npy'
+        if not os.path.exists(ir_path):
+            ir_path_all = get_file_path('dump/delay_filter',
+                                        suffix='.npy',
+                                        is_absolute=True)
+            if len(ir_path_all) > 0:
+                os.system(f"cp {' '.join(ir_path_all)} {ir_dir}")
         os.makedirs(f'dump/delay_filter_{pid}', exist_ok=True)
-        if os.path.exists(ir_file_path):
-            ir = np.load(ir_file_path, allow_pickle=True)
+        if os.path.exists(ir_path):
+            ir = np.load(ir_path, allow_pickle=True)
         else:
             sample_index_all = np.arange(order) - n_sample
             ir = (((f_high*order*np.sinc(f_high*sample_index_all)
                     * np.cos(np.pi/order*sample_index_all))
                    + np.cos(f_high*np.pi*sample_index_all))
                   * f_high*order/(order*order)/f_high)
-            np.save(ir_file_path, ir)
+            np.save(ir_path, ir)
 
         if is_padd:
             if padd_len is None:

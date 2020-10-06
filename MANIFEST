@@ -40,6 +40,7 @@ examples/delay_filter_test.py
 examples/roomsim_HP_effect.py
 examples/roomsim_RT_0.py
 examples/roomsim_diff_dist.py
+examples/roomsim_direct_brir.py
 examples/roomsim_effeciency_test.py
 examples/roomsim_parallel.py
 examples/validate.py

@@ -3,10 +3,11 @@ from scipy.interpolate import interp1d
 import scipy.signal
 import matplotlib.pyplot as plt
 import matplotlib
+import configparser
+import pickle
 import os
 
 from BasicTools.easy_parallel import easy_parallel
-from BasicTools.get_file_path import get_file_path
 from BasicTools.reverb.cal_DRR import cal_DRR
 from .Room import ShoeBox
 from .Source import Source
@@ -16,12 +17,20 @@ from .utils import norm_filter, nonedelay_filter
 
 
 class RoomSimulator(object):
-    def __init__(self, room_config, source_config=None, receiver_config=None):
+    def __init__(self, config_path=None,
+                 room_config=None, source_config=None, receiver_config=None,
+                 parent_pid=None):
         """split configuration into 3 parts, which is more flexible
             room_config: room size, absorption coefficients and other basic
             configuration like Fs source_config: configuration related to
             source receiver_config: configuration related to receiver
+            parent_pid: pid used for define dump_dir
         """
+        if config_path is not None:
+            [room_config,
+             receiver_config,
+             source_config] = self.parse_config_file(config_path)
+
         self._load_room_config(room_config)
         self.load_source_config(source_config)
         self.load_receiver_config(receiver_config)
@@ -89,18 +98,24 @@ class RoomSimulator(object):
              [+1, +1, +1],
              [+0, +1, +1]])
 
-        delay_ir_dir = f'dump/RoomSimulator/delay_filter/{os.getpid()}'
-        os.makedirs(delay_ir_dir, exist_ok=True)
-        if not os.path.exists(delay_ir_dir):
-            ir_path_all = get_file_path('dump/delay_filter',
-                                        suffix='.npy',
-                                        is_absolute=True)
-            if len(ir_path_all) > 0:
-                os.system(f"cp {' '.join(ir_path_all)} {delay_ir_dir}")
-        os.makedirs(delay_ir_dir, exist_ok=True)
-        self.delay_ir_dir = delay_ir_dir
+        self.dump_dir = f'dump/RoomSimulator_{parent_pid}'
 
-        self.B_power_table = {}
+        self.delay_ir_dir = f'{self.dump_dir}/delay_filter'
+        os.makedirs(self.delay_ir_dir, exist_ok=True)
+
+        self.B_power_table_path = f'{self.dump_dir}/B_power_table.pkl'
+        if os.path.exists(self.B_power_table_path):
+            try:
+                with open(self.B_power_table_path, 'rb') as B_power_table_file:
+                    self.B_power_table = pickle.load(B_power_table_file)
+            except Exception:
+                os.system(f'rm {self.B_power_table_path}')
+                self.B_power_table = {}
+        else:
+            self.B_power_table = {}
+
+        self.cube_index_dir = f'{self.dump_dir}/cube_index'
+        os.makedirs(self.cube_index_dir, exist_ok=True)
 
         # init
         self.amp_gain_reflect_all = np.zeros((0, self.F_abs.shape[0]))
@@ -109,7 +124,24 @@ class RoomSimulator(object):
         self.n_img = 0
 
     def clean_dump(self):
-        os.system(f'rm -r {self.delay_ir_dir}')
+        os.system(f'rm -r {self.dump_dir}')
+
+    def parse_config_file(self, config_path):
+        config_all = configparser.ConfigParser()
+        config_all.read(config_path)
+
+        room_config = configparser.ConfigParser()
+        room_config['Room'] = config_all['Room']
+
+        receiver_config = configparser.ConfigParser()
+        receiver_config['Receiver'] = config_all['Receiver']
+        n_mic = int(receiver_config['Receiver']['n_mic'])
+        for mic_i in range(n_mic):
+            receiver_config[f'Mic_{mic_i}'] = config_all[f'Mic_{mic_i}']
+
+        source_config = configparser.ConfigParser()
+        source_config['Source'] = config_all['Source']
+        return room_config, receiver_config, source_config
 
     def _load_room_config(self, config):
         # basic configuration
@@ -124,7 +156,7 @@ class RoomSimulator(object):
         if 'amp_theta' in config.keys():
             self.amp_theta = config['amp_theta']
         else:
-            self.amp_theta = 1e-6
+            self.amp_theta = 1e-4
 
         # configure of room
         self.room = ShoeBox(config)
@@ -308,7 +340,7 @@ class RoomSimulator(object):
         plt.title(f'n_img: {self.n_img}')
         return fig, ax
 
-    def cal_all_img(self, is_plot=False, is_verbose=False):
+    def cal_all_img(self, is_plot=False, is_verbose=False, n_worker=1):
         """ calculate all possible sound images based on matrix manipulation
         , which is more efficient
         To speed up:
@@ -318,23 +350,30 @@ class RoomSimulator(object):
             distance
         """
 
+        cube_index_all_path = os.path.join(
+            self.cube_index_dir,
+            '_'.join(map(str, self.n_cube_xyz))+'.npy')
+        if not os.path.exists(cube_index_all_path):
+            index_x_all, index_y_all, index_z_all = np.meshgrid(
+                np.arange(-self.n_cube_xyz[0], self.n_cube_xyz[0]+1,
+                          dtype=np.int16),
+                np.arange(-self.n_cube_xyz[1], self.n_cube_xyz[1]+1,
+                          dtype=np.int16),
+                np.arange(-self.n_cube_xyz[2], self.n_cube_xyz[2]+1,
+                          dtype=np.int16))
+            index_x_all, index_y_all, index_z_all = (
+                index_x_all.flatten().reshape(-1, 1),
+                index_y_all.flatten().reshape(-1, 1),
+                index_z_all.flatten().reshape(-1, 1))
+            cube_index_all = np.concatenate(
+                (index_x_all, index_y_all, index_z_all),
+                axis=1)
+            np.save(cube_index_all_path, cube_index_all)
+        else:
+            cube_index_all = np.load(cube_index_all_path, allow_pickle=True)
+
         img_pos_in_cube0 = (self.rel_img_pos_in_cube
                             * self.source.pos[np.newaxis, :])
-
-        index_x_all, index_y_all, index_z_all = np.meshgrid(
-            np.arange(-self.n_cube_xyz[0], self.n_cube_xyz[0]+1,
-                      dtype=np.int16),
-            np.arange(-self.n_cube_xyz[1], self.n_cube_xyz[1]+1,
-                      dtype=np.int16),
-            np.arange(-self.n_cube_xyz[2], self.n_cube_xyz[2]+1,
-                      dtype=np.int16))
-        index_x_all, index_y_all, index_z_all = (
-            index_x_all.flatten().reshape(-1, 1),
-            index_y_all.flatten().reshape(-1, 1),
-            index_z_all.flatten().reshape(-1, 1))
-        cube_index_all = np.concatenate(
-            (index_x_all, index_y_all, index_z_all),
-            axis=1)
         cube_pos_all = cube_index_all * self.room.size_double[np.newaxis, :]
 
         n_cube = cube_pos_all.shape[0]
@@ -361,10 +400,19 @@ class RoomSimulator(object):
         sort_index = np.argsort(np.sum(np.abs(img_pos_all), axis=1))
         img_pos_all = img_pos_all[sort_index]
         n_refl_all = n_refl_all[sort_index]
-        refl_gain_all = np.asarray(
-            [self.cal_wall_attenuate(n_refl_all[img_i])
-             for img_i in range(n_img)],
-            dtype=np.float16)
+
+        if n_worker > 1:
+            refl_gain_all = np.asarray(
+                easy_parallel(self.cal_wall_attenuate,
+                              n_refl_all[:, np.newaxis, :],
+                              n_worker=n_worker,
+                              dump_dir=self.dump_dir),
+                dtype=np.float16)
+        else:
+            refl_gain_all = np.asarray(
+                [self.cal_wall_attenuate(n_refl_all[img_i])
+                 for img_i in range(n_img)],
+                dtype=np.float16)
         valid_img_index = np.where(np.sum(refl_gain_all, axis=1)
                                    >= self.amp_theta)[0]
         self.n_img = valid_img_index.shape[0]
@@ -564,12 +612,15 @@ class RoomSimulator(object):
             img_index_batch = img_index_perm[i_start:i_end]
             tasks.append(
                 [self.img_pos_all[img_index_batch],
-                    self.refl_gain_all[img_index_batch],
-                    mic])
+                 self.refl_gain_all[img_index_batch],
+                 mic])
         results_batch_all = easy_parallel(self._cal_ir_refls,
                                           tasks,
-                                          n_worker=n_worker)
+                                          n_worker=n_worker,
+                                          dump_dir=self.dump_dir)
         if results_batch_all is None:
+            print(f'n_img: {self.n_img}',
+                  f'n_batch: {n_batch}')
             raise Exception('NULL rir')
         ir = np.zeros(self.ir_len)
         for results_batch in results_batch_all:
@@ -618,25 +669,19 @@ class RoomSimulator(object):
         return ir
 
     def cal_ir_mic(self, is_verbose=False, image_dir=None, parallel_type=2,
-                   n_worker=16):
+                   n_worker=8):
         """
         calculate rir with image sources already calculated
         """
-        if parallel_type == 0:
-            # no parallel
-            ir_all = []
-            for mic_i, mic in enumerate(self.receiver.mic_all):
-                if is_verbose:
-                    os.makedirs(f'{image_dir}/{mic_i}', exist_ok=True)
-                ir_all.append(
-                    self._cal_ir_1mic(mic, is_verbose, f'{image_dir}/{mic_i}'))
-        elif parallel_type == 1:  # a process per mic
+
+        if parallel_type == 1:  # a process per mic
             tasks = []
             for mic_i, mic in enumerate(self.receiver.mic_all):
                 if is_verbose:
                     os.makedirs(f'{image_dir}/{mic_i}', exist_ok=True)
                 tasks.append([mic, is_verbose, f'{image_dir}/{mic_i}'])
-            ir_all = easy_parallel(self._cal_ir_1mic, tasks, n_worker=n_worker)
+            ir_all = easy_parallel(self._cal_ir_1mic, tasks,
+                                   n_worker=n_worker, dump_dir=self.dump_dir)
         elif parallel_type == 2:
             # for each mic, divide sound images into batches
             # 1 process per batch
@@ -644,20 +689,21 @@ class RoomSimulator(object):
             for mic in self.receiver.mic_all:
                 ir_all.append(
                     self._cal_ir_1mic_parallel(mic, n_worker))
-        elif parallel_type == 3:
-            tasks = []
+        else:
+            # no parallel
+            ir_all = []
             for mic_i, mic in enumerate(self.receiver.mic_all):
                 if is_verbose:
                     os.makedirs(f'{image_dir}/{mic_i}', exist_ok=True)
-                tasks.append([mic, n_worker])
-            ir_all = easy_parallel(self._cal_ir_1mic_parallel, tasks,
-                                   n_worker=self.receiver.n_mic)
+                ir_all.append(
+                    self._cal_ir_1mic(mic, is_verbose, f'{image_dir}/{mic_i}'))
 
         ir_all = np.concatenate(
-            [ir.reshape([-1, 1]) for ir in ir_all],
+            [ir.reshape([-1, 1]) for ir in ir_all if ir is not None],
             axis=1)
 
-        np.save('dump/B_power_table.npy', self.B_power_table)
+        with open(self.B_power_table_path, 'wb') as B_power_table_file:
+            pickle.dump(self.B_power_table, B_power_table_file)
         return ir_all
 
     def cal_direct_ir_mic(self):
@@ -670,8 +716,11 @@ class RoomSimulator(object):
             axis=1)
         return direct_ir_all
 
-    def cal_DRR(self):
-        ir = self._cal_ir_1mic(self.receiver)
+    def cal_DRR(self, n_worker=1):
+        if n_worker > 1:
+            ir = self._cal_ir_1mic_parallel(self.receiver, n_worker)
+        else:
+            ir = self._cal_ir_1mic(self.receiver)
         direct_ir = self._cal_direct_ir_1mic(self.receiver)
         drr = cal_DRR(ir, direct_ir)
         return drr

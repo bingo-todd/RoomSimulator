@@ -34,8 +34,6 @@ if __name__ == '__main__':
     roomsim = RoomSimulator(room_config=room_config, source_config=None,
                             receiver_config=receiver_config)
 
-    roomsim._plot_HP_spec('../images/HP_filter_spectrum.png')
-
     azi = 0
     azi_rad = azi/180*np.pi
     source_config = configparser.ConfigParser()
@@ -58,7 +56,6 @@ if __name__ == '__main__':
     print(f'compact_version elapsed time: {t_end-t_start}s')
 
     t_start = time.time()
-    roomsim.amp_theta = 1e-4
     roomsim.cal_all_img(n_worker=8)
     rir_compact = roomsim.cal_ir_mic()
     t_end = time.time()

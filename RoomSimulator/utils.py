@@ -78,7 +78,7 @@ def delay_filter(x, n_sample, order=128, is_padd=False, padd_len=None,
     n_sample = n_sample - n_sample_int
 
     pid = os.getpid()
-    ir_dir = f'dump/delay_filter/{pid}'
+    ir_dir = f'dump/delay_filter_{pid}'
     if np.abs(n_sample) > 1e-10:
         ir_path = f'{ir_dir}/{n_sample:.5f}.npy'
         if not os.path.exists(ir_path):
@@ -87,7 +87,7 @@ def delay_filter(x, n_sample, order=128, is_padd=False, padd_len=None,
                                         is_absolute=True)
             if len(ir_path_all) > 0:
                 os.system(f"cp {' '.join(ir_path_all)} {ir_dir}")
-        os.makedirs(f'dump/delay_filter_{pid}', exist_ok=True)
+        os.makedirs(ir_dir, exist_ok=True)
         if os.path.exists(ir_path):
             ir = np.load(ir_path, allow_pickle=True)
         else:
@@ -119,9 +119,17 @@ def delay_filter_fft(x, n_sample):
 
     if np.abs(n_sample) > 1e-10:
         x_len = x.shape[0]
+        n_fft_valid = np.int(np.floor(x_len/2.) + 1)
+
         x_spec = np.fft.fft(x)
-        norm_freqs = np.arange(x_len)/x_len
-        phase_shift = np.exp(-1j*2*np.pi*norm_freqs*n_sample)
+        norm_freqs_half = np.arange(n_fft_valid)/x_len
+        phase_shift_half = np.exp(-1j*2*np.pi*norm_freqs_half*n_sample)
+        if np.mod(x_len, 2) == 1:
+            phase_shift = np.concatenate((phase_shift_half, np.flip(np.conj(phase_shift_half[1:]))))
+        else:
+            phase_shift = np.concatenate((phase_shift_half, np.flip(np.conj(phase_shift_half[1:-1]))))
+            phase_shift[n_fft_valid-1] = 1
         x_spec_delayed = x_spec*phase_shift
+        print(np.fft.ifft(x_spec_delayed))
         x = np.real(np.fft.ifft(x_spec_delayed))
     return x

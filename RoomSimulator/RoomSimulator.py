@@ -6,6 +6,7 @@ import matplotlib
 import configparser
 import pickle
 import os
+import sys
 
 from BasicTools.easy_parallel import easy_parallel
 from BasicTools.reverb.cal_DRR import cal_DRR
@@ -402,6 +403,7 @@ class RoomSimulator(object):
         n_refl_all = n_refl_all[sort_index]
 
         if n_worker > 1:
+            # TODO: further investigation, parallel cost more time
             refl_gain_all = np.asarray(
                 easy_parallel(self.cal_wall_attenuate,
                               n_refl_all[:, np.newaxis, :],
@@ -704,6 +706,15 @@ class RoomSimulator(object):
 
         with open(self.B_power_table_path, 'wb') as B_power_table_file:
             pickle.dump(self.B_power_table, B_power_table_file)
+        #
+        print_var = False
+        if print_var:
+            for var_name in dir(self):
+                print(var_name)
+                if not var_name.startswith('__'):
+                    var = getattr(self, var_name)
+                    print(f'var: ', sys.getsizeof(var))
+
         return ir_all
 
     def cal_direct_ir_mic(self):

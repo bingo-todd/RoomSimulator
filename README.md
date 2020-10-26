@@ -1,15 +1,15 @@
 # RoomSimulator: a room impulse response simulator implemented in python
 
-RoomSimulator is developed on the basis of **RoomSim** ([github](https://github.com/bingo-todd/Roomsim_Campbell)) developed by D. R. Campbell 
+RoomSimulator is developed on the basis of **RoomSim** ([github](https://github.com/bingo-todd/Roomsim_Campbell)) developed by D. R. Campbell
 
 ```shell
 RoomSimulator/
-├── AxisTransform.py 
+├── AxisTransform.py
 ├── DelayFilter.py
 ├── Directivity.py
-├── log  
+├── log
 ├── plot_cube.py
-├── Receiver.py  
+├── Receiver.py
 ├── Reverb.py
 ├── Room.py
 ├── RoomSim.py
@@ -28,7 +28,7 @@ room_config['Room'] = {
     'size': '4, 4, 4',
     'RT60': ', '.join([f'{item}' for item in np.ones(6) * 0.2]),
     'A': '',
-    'Fs': 44100,  # other value, the hrir will be resampled 
+    'Fs': 44100,  # other value, the hrir will be resampled
     'reflect_order': -1,
     'HP_cutoff': 100}
 
@@ -77,7 +77,7 @@ Moving the sound source around the microphones
 
 <img src="images/room.png" style="zoom:50%;" />
 
-All image sound sources whose delays are smaller then the RT60   
+All image sound sources whose delays are smaller then the RT60
 
 ![](images/image_sources.png)
 
@@ -85,7 +85,7 @@ visualizing the calculating procedure of RIR
 
 <img src="images/rir_verbose.gif" style="zoom:50%;" />
 
-## Validation 
+## Validation
 
 Comparison with RoomSim under the same settings
 
@@ -97,7 +97,7 @@ Comparison with RoomSim under the same settings
 
 - Allowed directives of sensor
 
-   
+
 
   | null_sensor                             | omnidirectional                             | unidirectional                             | bidirectional                             | hemisphere                             |
   | --------------------------------------- | ------------------------------------------- | ------------------------------------------ | ----------------------------------------- | -------------------------------------- |
@@ -113,7 +113,7 @@ Comparison with RoomSim under the same settings
   | -------------------------------------- | -------------------------------------- |
   | ![](images/directivity/binaural_L.png) | ![](images/directivity/binaural_R.png) |
 
-  
+
 
 - High-pass filter
 
@@ -125,16 +125,16 @@ Comparison with RoomSim under the same settings
 
   v2: delaying input by modifying the phase spectrum
 
-  ![](images/delay_filter_098.png)
+  ![](images/delay_filter.png)
 
   RIR anesthetization with delay filter(v1) [roomsim: matlab toolbox]
 
   <img src='images/validation_with_delayfilter.png'>
 
-  RIR anesthetization without delay filter(v1) 
+  RIR anesthetization without delay filter(v1)
 
   <img src='images/validation_without_delayfilter.png'>
 
 - Terminologies of rotation
 
-  <img src="images/rotation_angle_definition.png"> 
+  <img src="images/rotation_angle_definition.png">

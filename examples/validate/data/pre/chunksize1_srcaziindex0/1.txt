@@ -1,0 +1,4 @@
+~/Work_Space/Localize/Models/WaveLoc/synroom/syn_BRIRs/validate/data/pre/direct/15_0387_0.wav: 0.5744; 21.8401
+~/Work_Space/Localize/Models/WaveLoc/synroom/syn_BRIRs/validate/data/pre/reverb/15_0387_0.wav: 0.5744; 21.8401
+# average result
+# cp:0.5744 rmse:21.8401

@@ -10,6 +10,7 @@ import sys
 
 from BasicTools.easy_parallel import easy_parallel
 from BasicTools.reverb.cal_DRR import cal_DRR
+from BasicTools.run_in_back import run_in_back
 from .Room import ShoeBox
 from .Source import Source
 from .Receiver import Receiver
@@ -115,8 +116,8 @@ class RoomSimulator(object):
         else:
             self.B_power_table = {}
 
-        self.cube_index_dir = f'{self.dump_dir}/cube_index'
-        os.makedirs(self.cube_index_dir, exist_ok=True)
+        self.cube_grid_dir = f'{self.dump_dir}/cube_index'
+        os.makedirs(self.cube_grid_dir, exist_ok=True)
 
         # init
         self.amp_gain_reflect_all = np.zeros((0, self.F_abs.shape[0]))
@@ -275,7 +276,7 @@ class RoomSimulator(object):
                         * np.cos(np.pi/order*sample_index_all))
                        + np.cos(f_high*np.pi*sample_index_all))
                       * f_high*order/(order*order)/f_high)
-                np.save(ir_path, ir)
+                run_in_back(np.save, ir_path, ir)
 
             if is_padd:
                 if padd_len is None:
@@ -293,31 +294,14 @@ class RoomSimulator(object):
 
         base_str = f'{x:0>.4f}'
         exp_str = f'{n:d}'
-        if (base_str in self.B_power_table.keys()
-                and exp_str in self.B_power_table[base_str]):
-            y = self.B_power_table[base_str][exp_str]
-        else:
-            # find all item with the same base
-            if base_str not in self.B_power_table.keys():
-                self.B_power_table[base_str] = {}
-                y = np.power(x, n)
+        if base_str in self.B_power_table.keys():
+            if exp_str in self.B_power_table[base_str]:
+                y = self.B_power_table[base_str][exp_str]
             else:
-                y_all = self.B_power_table[base_str]
-                exp_all = list(map(int, y_all.keys()))
-                # break n into parts
-                n_remain = n
-                y_tmp = 1  # temporary result
-                while len(exp_all) > 0 and n_remain > exp_all[0]:
-                    # remove too large exp
-                    exp_all = list(
-                        filter(lambda x: x <= n_remain, exp_all))
-                    n_sub = exp_all[-1]
-                    y_tmp = y_tmp * y_all[f'{n_sub}']
-                    n_remain = n_remain - n_sub
-                if n_remain < 0:
-                    print('negative exponent')
-                    return None
-                y = y_tmp * (x**n_remain)
+                y = np.power(x, n)
+        else:
+            y = np.power(x, n)
+            self.B_power_table[base_str] = {}
             self.B_power_table[base_str][exp_str] = y
         return y
 
@@ -328,7 +312,7 @@ class RoomSimulator(object):
                 attenuate[freq_i] = (attenuate[freq_i]
                                      * self.local_power(
                                          self.room.B[wall_i, freq_i],
-                                         n_refl[wall_i]))
+                                         int(n_refl[wall_i])))
         return attenuate
 
     def plot_all_img(self, ax=None):
@@ -351,47 +335,42 @@ class RoomSimulator(object):
             distance
         """
 
-        cube_index_all_path = os.path.join(
-            self.cube_index_dir,
-            '_'.join(map(str, self.n_cube_xyz))+'.npy')
-        if not os.path.exists(cube_index_all_path):
-            index_x_all, index_y_all, index_z_all = np.meshgrid(
-                np.arange(-self.n_cube_xyz[0], self.n_cube_xyz[0]+1,
-                          dtype=np.int16),
-                np.arange(-self.n_cube_xyz[1], self.n_cube_xyz[1]+1,
-                          dtype=np.int16),
-                np.arange(-self.n_cube_xyz[2], self.n_cube_xyz[2]+1,
-                          dtype=np.int16))
-            index_x_all, index_y_all, index_z_all = (
-                index_x_all.flatten().reshape(-1, 1),
-                index_y_all.flatten().reshape(-1, 1),
-                index_z_all.flatten().reshape(-1, 1))
-            cube_index_all = np.concatenate(
-                (index_x_all, index_y_all, index_z_all),
-                axis=1)
-            np.save(cube_index_all_path, cube_index_all)
+        cube_grid_name = '-'.join([str(item) for item in self.n_cube_xyz])
+        cube_grid_path = f'{self.cube_grid_dir}/{cube_grid_name}.npy'
+        if os.path.exists(cube_grid_path):
+            # cube_grid already calculated
+            cube_grid = np.load(cube_grid_path, allow_pickle=True)
         else:
-            cube_index_all = np.load(cube_index_all_path, allow_pickle=True)
+            # image sources. like a 3d grid
+            grid_x_all, grid_y_all, grid_z_all = np.meshgrid(
+                np.arange(-self.n_cube_xyz[0], self.n_cube_xyz[0]+1),
+                np.arange(-self.n_cube_xyz[1], self.n_cube_xyz[1]+1),
+                np.arange(-self.n_cube_xyz[2], self.n_cube_xyz[2]+1))
+            grid_x_all = grid_x_all.flatten().reshape(-1, 1)
+            grid_y_all = grid_y_all.flatten().reshape(-1, 1)
+            grid_z_all = grid_z_all.flatten().reshape(-1, 1)
+            cube_grid = np.concatenate((grid_x_all, grid_y_all, grid_z_all),
+                                       axis=1)
+            run_in_back(np.save, cube_grid_path, cube_grid)
 
         img_pos_in_cube0 = (self.rel_img_pos_in_cube
                             * self.source.pos[np.newaxis, :])
-        cube_pos_all = cube_index_all * self.room.size_double[np.newaxis, :]
-
+        cube_pos_all = cube_grid * self.room.size_double[np.newaxis, :]
         n_cube = cube_pos_all.shape[0]
         n_img = n_cube * self.n_img_in_cube
         img_pos_all = np.reshape(
-            (cube_pos_all[:, np.newaxis, :]
-             + img_pos_in_cube0[np.newaxis, :, :]),
+            (cube_pos_all[:, np.newaxis, :] +
+             img_pos_in_cube0[np.newaxis, :, :]),
             (n_img, 3))
 
         # number of reflections on each wall
-        cube_index_all_swapxy = cube_index_all.copy()
-        cube_index_all_swapxy[:, 0] = cube_index_all[:, 1]
-        cube_index_all_swapxy[:, 1] = cube_index_all[:, 0]
-        cube_index_all_swapxy = np.expand_dims(
-            cube_index_all_swapxy, axis=1).repeat(self.n_img_in_cube, axis=1)
-        n_refl_xyz1_all = np.abs(cube_index_all_swapxy)
-        n_refl_xyz0_all = np.abs(cube_index_all_swapxy
+        cube_grid_swapxy = cube_grid.copy()
+        cube_grid_swapxy[:, 0] = cube_grid[:, 1]
+        cube_grid_swapxy[:, 1] = cube_grid[:, 0]
+        cube_grid_swapxy = np.expand_dims(
+            cube_grid_swapxy, axis=1).repeat(self.n_img_in_cube, axis=1)
+        n_refl_xyz1_all = np.abs(cube_grid_swapxy)
+        n_refl_xyz0_all = np.abs(cube_grid_swapxy
                                  - self.rel_refl_num_in_cube[np.newaxis, :, :])
         n_refl_all = np.concatenate(
             (n_refl_xyz0_all, n_refl_xyz1_all),
@@ -713,7 +692,7 @@ class RoomSimulator(object):
                 print(var_name)
                 if not var_name.startswith('__'):
                     var = getattr(self, var_name)
-                    print(f'var: ', sys.getsizeof(var))
+                    print('var: ', sys.getsizeof(var))
 
         return ir_all
 

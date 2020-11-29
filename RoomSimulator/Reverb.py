@@ -1,7 +1,8 @@
 import numpy as np
 
 
-def Absorb2RT(A, room_size, F_abs=None, c=343, A_air=None, estimator='Norris_Eyring'):
+def Absorb2RT(A, room_size, F_abs=None, c=343, A_air=None,
+              estimator='Norris_Eyring'):
     """ Estimate reverberation time based on room acoustic parameters,
     translated from matlab code developed by Douglas R Campbell
     Args:
@@ -46,19 +47,21 @@ def Absorb2RT(A, room_size, F_abs=None, c=343, A_air=None, estimator='Norris_Eyr
         if estimator == 'SabineAirHiAbs':
             # % Sabine equation (SI units) adjusted for air and high absorption
             RT60 = np.divide(55.25 / c * V_room,
-                             4 * A_air * V_room + np.multiply(Se, (1 + A_mean / 2)))
+                             4*A_air*V_room+np.multiply(Se, (1+A_mean/2)))
         if estimator == 'Norris_Eyring':
             # Norris-Eyring estimate adjusted for air absorption
             RT60 = np.divide(55.25 / c * V_room,
-                             4 * A_air * V_room - S_room * np.log(1 - A_mean + np.finfo(float).eps))
+                             (4*A_air*V_room
+                              - S_room*np.log(1-A_mean+np.finfo(float).eps)))
 
         return RT60
 
 
-def RT2Absorb(RT60, room_size, F_abs=None, c=343, A_air=None, estimator='Norris_Eyring'):
+def RT2Absorb(RT60, room_size, F_abs=None, c=343, A_air=None,
+              estimator='Norris_Eyring'):
     if np.max(RT60) < 1e-10:
         return np.ones((6, 6), dtype=np.float32)
-    
+
     if F_abs is None:
         F_abs = np.asarray([125, 250, 500, 1000, 2000, 4000])
 
@@ -78,18 +81,23 @@ def RT2Absorb(RT60, room_size, F_abs=None, c=343, A_air=None, estimator='Norris_
         A = (np.divide(55.25 / c * V_room, RT60) - 4 * A_air * V_room) / S_room
     if estimator == 'SabineAirHiAbs':
         A = np.sqrt(
-            2 * (np.divide(55.25 / c * V_room, RT60) - 4 * A_air * V_room) + 1) - 1
+            2*(np.divide(55.25/c*V_room, RT60)-4*A_air*V_room)+1)-1
     if estimator == 'Norris_Eyring':
-        A = 1 - np.exp((4 * A_air * V_room - np.divide(55.25 / c * V_room, RT60)) / S_room)
+        A = 1-np.exp((4*A_air*V_room-np.divide(55.25/c*V_room, RT60))/S_room)
     else:
         A = np.ones(6) * np.Inf
-    return np.repeat(A.reshape([1, 6]), 6, axis=0)
+
+    A = np.repeat(A.reshape([1, 6]), 6, axis=0)  # all 6 wall
+    # set precision, two digit after the decimal separator
+    A = np.round(A*100)/100
+    return A
 
 
 def test_Absorb2RT():
 
     # A_acoustic_plaster = np.asarray([0.10,0.20,0.50,0.60,0.70,0.70])
     # A_RT0_5 = np.asarray([0.2136,0.2135,0.2132,0.2123,0.2094,0.1999])
+    F_abs = np.asarray([125, 250, 500, 1000, 2000, 4000])
     A_RT0_5 = np.asarray([0.2214, 0.3051, 0.6030, 0.7770, 0.8643, 0.8627])
     room_size = (5.1, 7.1, 3)
     A = np.repeat(A_RT0_5.reshape((-1, 1)), repeats=6, axis=1)

@@ -27,7 +27,8 @@ class ShoeBox(object):
 
         if self.RT60 is None:
             self.RT60 = Absorb2RT(self.A, room_size=self.size)
-        self.B = np.sqrt(1 - self.A)  # reflection coefficients
+        B = np.sqrt(1 - self.A)  # reflection coefficients
+        self.B = np.round(B*100)/100
 
     def visualize(self, ax=None, extra_point=None, show_absorption=False):
         if not show_absorption:

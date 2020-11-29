@@ -122,7 +122,7 @@ class RoomSimulator(object):
         # init
         self.amp_gain_reflect_all = np.zeros((0, self.F_abs.shape[0]))
         self.img_pos_all = np.zeros((0, 3))
-        self.refl_gain_all = np.zeros((0, self.F_abs.shape[0]))
+        self.refl_amp_spec_all = np.zeros((0, self.F_abs.shape[0]))
         self.n_img = 0
 
     def clean_dump(self):
@@ -286,34 +286,48 @@ class RoomSimulator(object):
         return x
 
     def local_power(self, x, n):
-        # for efficience test
-        # return np.power(x, n)
+        # seems direct calculation is the most efficient way
+        return np.power(x, n)
 
-        if n < 1e-10:
-            return 1
+        # if n < 1e-10:
+        #     return 1
+        # base_str = f'{x:0>.4f}'
+        # exp_str = f'{n:d}'
+        # if base_str in self.B_power_table.keys():
+        #     if exp_str in self.B_power_table[base_str]:
+        #         y = self.B_power_table[base_str][exp_str]
+        #     else:
+        #         y = np.power(x, n)
+        # else:
+        #     y = np.power(x, n)
+        #     self.B_power_table[base_str] = {}
+        #     self.B_power_table[base_str][exp_str] = y
+        # return y
 
-        base_str = f'{x:0>.4f}'
-        exp_str = f'{n:d}'
-        if base_str in self.B_power_table.keys():
-            if exp_str in self.B_power_table[base_str]:
-                y = self.B_power_table[base_str][exp_str]
-            else:
-                y = np.power(x, n)
-        else:
-            y = np.power(x, n)
-            self.B_power_table[base_str] = {}
-            self.B_power_table[base_str][exp_str] = y
-        return y
+    def call_refl_amp_spec(self, refl_num_all):
+        """ for each image sound source, reflections of all 6 walls only
+        differ in number by 1, what's more, after limitting the precision of
+        reflection coefficients, the reflection coefficients of all 6 frequency
+        bands can be the same (in most conditions). Based on these specialty
+        the calculation of spectral amplitude of reflections can be optimized
+        Args:
+            refl_num_all: number of reflections occurse on 6 walls
+        """
+        refl_amp_spec = np.ones(self.n_F_abs)
+        #
+        unique_B_values = np.unique(self.room.B)
+        min_refl_num = np.int(np.min(refl_num_all))
+        base_exp_value = {f'{B_value:.2f}': B_value**min_refl_num
+                          for B_value in unique_B_values}
 
-    def cal_wall_attenuate(self, n_refl):
-        attenuate = np.ones(self.n_F_abs)
         for wall_i in range(6):
             for freq_i in range(self.n_F_abs):
-                attenuate[freq_i] = (attenuate[freq_i]
-                                     * self.local_power(
-                                         self.room.B[wall_i, freq_i],
-                                         int(n_refl[wall_i])))
-        return attenuate
+                B_value = self.room.B[wall_i, freq_i]
+                refl_num = np.int(refl_num_all[wall_i])
+                tmp = (base_exp_value[f'{B_value:.2f}']
+                       * (B_value**(refl_num-min_refl_num)))
+                refl_amp_spec[freq_i] = refl_amp_spec[freq_i]*tmp
+        return refl_amp_spec
 
     def plot_all_img(self, ax=None):
         if ax is None:
@@ -383,22 +397,22 @@ class RoomSimulator(object):
 
         if n_worker > 1:
             # TODO: further investigation, parallel cost more time
-            refl_gain_all = np.asarray(
-                easy_parallel(self.cal_wall_attenuate,
+            refl_amp_spec_all = np.asarray(
+                easy_parallel(self.call_refl_amp_spec,
                               n_refl_all[:, np.newaxis, :],
                               n_worker=n_worker,
                               dump_dir=self.dump_dir),
                 dtype=np.float16)
         else:
-            refl_gain_all = np.asarray(
-                [self.cal_wall_attenuate(n_refl_all[img_i])
+            refl_amp_spec_all = np.asarray(
+                [self.call_refl_amp_spec(n_refl_all[img_i])
                  for img_i in range(n_img)],
                 dtype=np.float16)
-        valid_img_index = np.where(np.sum(refl_gain_all, axis=1)
+        valid_img_index = np.where(np.sum(refl_amp_spec_all, axis=1)
                                    >= self.amp_theta)[0]
         self.n_img = valid_img_index.shape[0]
         self.img_pos_all = img_pos_all[valid_img_index]
-        self.refl_gain_all = refl_gain_all[valid_img_index]
+        self.refl_amp_spec_all = refl_amp_spec_all[valid_img_index]
 
         if is_plot:
             fig, ax = self.room.visualize(extra_point=self.img_pos_all)
@@ -455,13 +469,15 @@ class RoomSimulator(object):
         del dist_all_tmp  # dist_all is no longer used
 
         img_pos_all = np.zeros((n_img_max, 3), dtype=np.float32)
-        refl_gain_all = np.zeros((n_img_max, self.n_F_abs), dtype=np.float16)
+        refl_amp_spec_all = np.zeros((n_img_max, self.n_F_abs), dtype=np.float16)
         n_img = 0
         for index in sort_index:
-            gain = self.cal_wall_attenuate(np.squeeze(n_refl_all_tmp[index]))
-            if np.sum(gain) < self.amp_theta:
+            refl_amp_spec = self.call_refl_amp_spec(
+                np.squeeze(
+                    n_refl_all_tmp[index]))
+            if np.sum(refl_amp_spec) < self.amp_theta:  # discare small values
                 continue
-            refl_gain_all[n_img] = gain
+            refl_amp_spec_all[n_img] = gain
             img_pos_all[n_img] = img_pos_all_tmp[index]
             n_img = n_img + 1
 
@@ -469,7 +485,7 @@ class RoomSimulator(object):
         del n_refl_all_tmp, img_pos_all_tmp,
 
         self.img_pos_all = img_pos_all[:n_img]
-        self.refl_gain_all = refl_gain_all[:n_img]
+        self.refl_amp_spec_all = refl_amp_spec_all[:n_img]
         self.n_img = n_img
 
         if is_plot:
@@ -477,10 +493,10 @@ class RoomSimulator(object):
             plt.title(f'n_img: {self.n_img}')
             return fig, ax
 
-    def amp_spec_to_ir(self, refl_amp):
+    def amp_spec_to_ir(self, refl_amp_spec):
         # interpolated grid points
         refl_amp_extend = np.concatenate(
-            (refl_amp[:1], refl_amp, refl_amp[-1:]))
+            (refl_amp_spec[:1], refl_amp_spec, refl_amp_spec[-1:]))
         amp_spec_half = interp1d(self.F_abs_extend_norm, refl_amp_extend)(
             self.freq_norm_all)
         amp_spec = np.concatenate(
@@ -491,11 +507,11 @@ class RoomSimulator(object):
              ir[:self.n_fft_half_valid+1]))
         return ir
 
-    def _cal_ir_1refl(self, img_pos, refl_gain, mic):
+    def _cal_ir_1refl(self, img_pos, refl_amp_spec, mic):
         """calculate the impulse response of sound image
         Args:
             img_pos: the position of sound image
-            refl_gain: the amplitude gain of reflections
+            refl_amp_spec: the amplitude gain of reflections
             mic: microphone obj
         Returns:
             start_index_ir: the position of whole ir where this
@@ -536,14 +552,14 @@ class RoomSimulator(object):
             *angle_mic_to_img, _ = cartesian2pole(pos_mic_to_img)
 
             # amplitude gain of wall
-            refl_amp = refl_gain
+            refl_amp_spec = refl_amp_spec
             # amplitude gain of distance
-            refl_amp = refl_amp/dist
+            refl_amp_spec = refl_amp_spec/dist
             # amplitude gain of air
-            refl_amp = refl_amp*(self.air_attenuate_per_dist**dist)
+            refl_amp_spec = refl_amp_spec*(self.air_attenuate_per_dist**dist)
 
             # calculate ir based on amp
-            ir_tmp = self.amp_spec_to_ir(refl_amp)
+            ir_tmp = self.amp_spec_to_ir(refl_amp_spec)
 
             # directivity of sound source, directivity after imaged
             ir_source = self.source.get_ir(angle_mic_to_img)
@@ -569,12 +585,12 @@ class RoomSimulator(object):
                     return start_index_ir, ir_tmp[:ir_len_tmp]
         return None
 
-    def _cal_ir_refls(self, img_pos, refl_amp, mic):
+    def _cal_ir_refls(self, img_pos, refl_amp_spec, mic):
         n_img = len(img_pos)
         results = []
         for img_i in np.arange(n_img):
             result = self._cal_ir_1refl(img_pos[img_i],
-                                        refl_amp[img_i],
+                                        refl_amp_spec[img_i],
                                         mic)
             results.append(result)
         return results
@@ -593,7 +609,7 @@ class RoomSimulator(object):
             img_index_batch = img_index_perm[i_start:i_end]
             tasks.append(
                 [self.img_pos_all[img_index_batch],
-                 self.refl_gain_all[img_index_batch],
+                 self.refl_amp_spec_all[img_index_batch],
                  mic])
         results_batch_all = easy_parallel(self._cal_ir_refls,
                                           tasks,
@@ -620,7 +636,7 @@ class RoomSimulator(object):
 
     def _cal_ir_1mic(self, mic, is_verbose=False, img_dir=None):
         ir = np.zeros(self.ir_len)
-        results = self._cal_ir_refls(self.img_pos_all, self.refl_gain_all, mic)
+        results = self._cal_ir_refls(self.img_pos_all, self.refl_amp_spec_all, mic)
         for img_i, result in enumerate(results):
             if result is None:
                 continue
@@ -721,7 +737,7 @@ class RoomSimulator(object):
         np.savez(data_path,
                  n_img=self.n_img,
                  img_pos_all=self.img_pos_all,
-                 refl_gain_all=self.refl_gain_all)
+                 refl_amp_spec_all=self.refl_amp_spec_all)
 
     def load_img_info(self, data_path=None):
         if data_path is None:
@@ -729,4 +745,4 @@ class RoomSimulator(object):
         info = np.load(data_path)
         self.n_img = info['n_img']
         self.img_pos_all = info['img_pos_all']
-        self.refl_gain_all = info['refl_gain_all']
+        self.refl_amp_spec_all = info['refl_amp_spec_all']

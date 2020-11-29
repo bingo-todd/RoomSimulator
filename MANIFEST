@@ -32,6 +32,7 @@ examples/roomsim_diff_dist.py
 examples/roomsim_direct_brir.py
 examples/roomsim_effeciency_test.py
 examples/roomsim_parallel.py
+examples/roomsim_test.py
 examples/speedup_power_test.py
-examples/validate.py
+examples/validate_with_matlab.py
 images/__init__.py

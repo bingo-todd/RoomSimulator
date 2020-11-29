@@ -305,7 +305,7 @@ class RoomSimulator(object):
         # return y
 
     def call_refl_amp_spec(self, refl_num_all):
-        """ for each image sound source, reflections of all 6 walls only
+        """ for each image sound source, reflections of opposite walls only
         differ in number by 1, what's more, after limitting the precision of
         reflection coefficients, the reflection coefficients of all 6 frequency
         bands can be the same (in most conditions). Based on these specialty
@@ -313,21 +313,23 @@ class RoomSimulator(object):
         Args:
             refl_num_all: number of reflections occurse on 6 walls
         """
-        refl_amp_spec = np.ones(self.n_F_abs)
-        #
-        unique_B_values = np.unique(self.room.B)
-        min_refl_num = np.int(np.min(refl_num_all))
-        base_exp_value = {f'{B_value:.2f}': B_value**min_refl_num
-                          for B_value in unique_B_values}
-
-        for wall_i in range(6):
-            for freq_i in range(self.n_F_abs):
-                B_value = self.room.B[wall_i, freq_i]
-                refl_num = np.int(refl_num_all[wall_i])
-                tmp = (base_exp_value[f'{B_value:.2f}']
-                       * (B_value**(refl_num-min_refl_num)))
-                refl_amp_spec[freq_i] = refl_amp_spec[freq_i]*tmp
+        tmp = self.room.B**(np.reshape(refl_num_all, [6, 1]))
+        refl_amp_spec = np.prod(tmp, axis=0)
         return refl_amp_spec
+
+        # refl_amp_spec = np.ones(self.n_F_abs, dtype=np.float32)
+        # #
+        # unique_B_values = np.unique(self.room.B)
+        # base_exp_value = [{f'{B_value:.2f}': B_value**refl_num
+        #                   for B_value in unique_B_values}
+        #                   for refl_num in refl_num_all]
+
+        # for wall_i in range(6):
+        #     for freq_i in range(self.n_F_abs):
+        #         B_value = self.room.B[wall_i, freq_i]
+        #         tmp = base_exp_value[wall_i][f'{B_value:.2f}']
+        #         refl_amp_spec[freq_i] = refl_amp_spec[freq_i]*tmp
+        # return refl_amp_spec
 
     def plot_all_img(self, ax=None):
         if ax is None:
